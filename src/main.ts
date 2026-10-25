@@ -130,7 +130,11 @@ function selectGenerator(id: string): void {
   generate();
 }
 
-window.addEventListener("hashchange", () => selectGenerator(location.hash.slice(1)));
+// Only generator ids switch generator; other hashes (e.g. the "#main" skip link) are page anchors.
+window.addEventListener("hashchange", () => {
+  const id = location.hash.slice(1);
+  if (findGenerator(id)) selectGenerator(id);
+});
 
 // ---- Generating ----
 

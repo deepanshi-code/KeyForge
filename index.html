@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="KeyForge: forge unique usernames, project names, team names, personas and secure passwords. Private, encrypted on your device, and it learns your taste.">
+  <meta name="theme-color" content="#fafaf9">
+  <title>KeyForge</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <!-- Apply a saved light/dark choice before first paint, so the page never flashes the wrong theme. -->
+  <script>
+    try {
+      var t = localStorage.getItem("toolkit:theme");
+      if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
+</head>
+<body>
+  <!-- Shown only if the app's code didn't load (e.g. this file was double-clicked). main.ts removes it. -->
+  <div id="notRunning" style="max-width:560px;margin:40px auto;padding:20px 24px;font:16px/1.5 system-ui,sans-serif;border:1px solid #d4d4d8;border-radius:10px">
+    <strong>This page has to be run through Vite.</strong>
+    <p>This is the source file, and browsers can't run its TypeScript directly. In a terminal in this folder, run:</p>
+    <pre style="padding:8px 12px;border-radius:6px;background:rgba(127,127,127,.15)">npm install
+npm run dev</pre>
+    <p>Then open <strong>http://localhost:5173</strong>. Or run <code>npm run build</code> and open <code>dist/index.html</code>.</p>
+  </div>
+
+  <a class="skip-link" href="#main">Skip to generator</a>
+
+  <div class="app">
+    <aside class="sidebar">
+      <a class="brand" href="#">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+          <rect width="32" height="32" rx="8" />
+          <path d="M8 9h3v14H8zM11 15.2 18.6 9h4.1l-9.5 7.8zM13.2 15.2 22.7 23h-4.1L11 16.8z" />
+        </svg>
+        <span class="brand-name">KeyForge</span>
+      </a>
+
+      <nav class="gen-nav" aria-label="Generators">
+        <p class="nav-heading">Generators</p>
+        <ul id="genNav"></ul>
+      </nav>
+
+      <div class="sidebar-foot">
+        <button type="button" id="libraryBtn" class="nav-btn" aria-haspopup="dialog" aria-controls="libraryDrawer" aria-expanded="false">
+          <span class="nav-label">Saved</span>
+          <span id="savedCount" class="count" hidden>0</span>
+        </button>
+        <button type="button" id="accountBtn" class="nav-btn">
+          <span class="nav-label">Sign in</span>
+        </button>
+        <button type="button" id="themeBtn" class="nav-btn">
+          <span class="nav-label">System theme</span>
+        </button>
+        <p class="privacy">Runs entirely in your browser. Nothing you generate is sent anywhere.</p>
+      </div>
+    </aside>
+
+    <main id="main" class="main" tabindex="-1">
+      <header class="page-head">
+        <span id="genIcon" class="page-icon"></span>
+        <div>
+          <h1 id="genTitle"></h1>
+          <p id="genDesc" class="muted"></p>
+        </div>
+      </header>
+
+      <div class="workspace">
+        <section class="panel options-panel" aria-labelledby="optionsTitle">
+          <div class="panel-head">
+            <h2 id="optionsTitle">Options</h2>
+            <button type="button" id="resetBtn" class="link-btn">Reset</button>
+          </div>
+          <form id="genForm" novalidate>
+            <div id="fields" class="fields"></div>
+            <div class="field">
+              <div class="field-head" id="countHead"><label for="count">How many</label></div>
+              <input type="range" id="count" min="1" max="20" step="1" value="8">
+            </div>
+            <p id="formError" class="error" role="alert"></p>
+            <!-- Lets Enter in a text box regenerate. -->
+            <button type="submit" class="visually-hidden" tabindex="-1">Generate</button>
+          </form>
+        </section>
+
+        <section class="panel results-panel" aria-labelledby="resultsTitle">
+          <div class="results-head">
+            <h2 id="resultsTitle">Results <span id="resultCount" class="result-count"></span></h2>
+            <div class="results-tools">
+              <label id="tasteControl" class="toggle" for="tasteToggle" title="Rank results by similarity to the ones you've starred">
+                <input type="checkbox" role="switch" id="tasteToggle" aria-describedby="tasteStatus">
+                <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
+                <span class="toggle-label">Learn my taste</span>
+              </label>
+              <button type="button" id="copyAllBtn" class="btn">Copy all</button>
+              <button type="button" id="regenBtn" class="btn primary">Regenerate <kbd>R</kbd></button>
+            </div>
+          </div>
+          <p id="tasteStatus" class="status-line"></p>
+          <p id="batchNote" class="status-line"></p>
+          <p id="announcer" class="visually-hidden" aria-live="polite"></p>
+          <ul id="results" class="results"></ul>
+          <p id="secretNote" class="secret-note" hidden>
+            Generated on your device with <code>crypto.getRandomValues()</code>. Passwords are never saved to history or favourites.
+          </p>
+        </section>
+      </div>
+
+      <footer class="footer">
+        <span>Press <kbd>R</kbd> to regenerate</span>
+      </footer>
+    </main>
+  </div>
+
+  <div id="drawerOverlay" class="overlay" hidden></div>
+  <aside id="libraryDrawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="libTitle" hidden>
+    <div class="drawer-head">
+      <h2 id="libTitle">Saved</h2>
+      <button type="button" id="drawerClose" class="icon-btn" aria-label="Close"></button>
+    </div>
+    <div class="tabs" role="group" aria-label="Show">
+      <button type="button" class="tab" data-tab="favourites" aria-pressed="true">Favourites</button>
+      <button type="button" class="tab" data-tab="history" aria-pressed="false">History</button>
+      <button type="button" class="tab" data-tab="insights" aria-pressed="false">Insights</button>
+    </div>
+    <p id="guestNote" class="guest-note" hidden>
+      Not signed in: these are forgotten when you close the tab.
+      <button type="button" id="guestSignIn" class="link-btn">Sign in to keep them</button>
+    </p>
+    <ul id="libList" class="lib-list"></ul>
+    <div class="lib-actions">
+      <button type="button" id="exportBtn" class="btn small">Export</button>
+      <button type="button" id="importBtn" class="btn small">Import</button>
+      <button type="button" id="clearBtn" class="btn small danger">Clear</button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+    </div>
+    <p id="libNote" class="muted small"></p>
+  </aside>
+
+  <dialog id="authDialog" class="auth-dialog" aria-labelledby="authTitle">
+    <form id="authForm" novalidate>
+      <div class="auth-head">
+        <h2 id="authTitle">Sign in</h2>
+        <button type="button" id="authClose" class="icon-btn" aria-label="Close"></button>
+      </div>
+      <p id="authIntro" class="muted"></p>
+
+      <div id="authProfileField" class="field">
+        <label for="authProfile">Profile</label>
+        <select id="authProfile"></select>
+      </div>
+      <div id="authNameField" class="field">
+        <label for="authName">Profile name</label>
+        <input type="text" id="authName" maxlength="30" autocomplete="username" spellcheck="false" placeholder="e.g. Deepa">
+      </div>
+      <div class="field">
+        <label for="authPassword">Password</label>
+        <div class="password-wrap">
+          <input type="password" id="authPassword" autocomplete="current-password">
+          <button type="button" id="authReveal" class="icon-btn" aria-label="Show password" aria-pressed="false"></button>
+        </div>
+        <small id="capsNote" class="help caps-note" hidden>Caps Lock is on</small>
+      </div>
+      <div id="authConfirmField" class="field">
+        <label for="authConfirm">Confirm password</label>
+        <input type="password" id="authConfirm" autocomplete="new-password">
+        <small class="help">At least 8 characters. There's no "forgot password" — nobody else holds a copy.</small>
+      </div>
+
+      <p id="authError" class="error" role="alert"></p>
+      <button type="submit" id="authSubmit" class="btn primary wide">Sign in</button>
+
+      <div class="auth-links">
+        <button type="button" id="authSwitch" class="link-btn">Create a new profile</button>
+        <button type="button" id="authGuest" class="link-btn muted-link">Continue without signing in</button>
+      </div>
+      <p class="auth-note">Profiles live only in this browser. Saved names are encrypted with your password, so nobody else using this device can see them.</p>
+      <button type="button" id="authDelete" class="link-btn danger-link">Forgot your password? Delete this profile</button>
+    </form>
+  </dialog>
+
+  <div id="toasts" class="toasts"></div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

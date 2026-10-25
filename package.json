@@ -1,0 +1,23 @@
+{
+  "name": "keyforge",
+  "private": true,
+  "version": "1.0.0",
+  "description": "KeyForge — a private naming and identity toolkit: usernames, project names, team names, person names, personas and secure passwords.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
+  }
+}

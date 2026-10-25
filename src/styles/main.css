@@ -165,17 +165,48 @@ kbd {
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 8px;
+  gap: 11px;
+  padding: 0 6px;
   color: var(--text);
-  font-size: 15px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
   text-decoration: none;
 }
-.brand-mark { width: 26px; height: 26px; flex-shrink: 0; }
+.brand-mark {
+  width: 34px; height: 34px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--accent) 70%, transparent);
+  transition: transform 0.25s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
 .brand-mark rect { fill: var(--accent); }
 .brand-mark path { fill: var(--on-accent); }
+
+.brand-text { display: flex; flex-direction: column; min-width: 0; line-height: 1; }
+/* Wordmark: heavy and tightly tracked, "Forge" in the accent with a spark, like metal being struck. */
+.brand-name {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+}
+.brand-forge { color: var(--accent); }
+.brand-spark {
+  width: 9px; height: 9px;
+  margin: -1px 0 0 2px;
+  fill: var(--accent);
+  transition: transform 0.4s ease;
+}
+.brand-tagline {
+  margin-top: 5px;
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.brand:hover .brand-mark { transform: rotate(-8deg) scale(1.05); }
+.brand:hover .brand-spark { transform: rotate(90deg) scale(1.3); }
 
 .nav-heading {
   margin: 0 0 6px;
@@ -720,6 +751,9 @@ input[type="range"]:focus-visible { outline-offset: 6px; }
     border-bottom: 1px solid var(--border);
   }
   .brand { padding: 0; }
+  .brand-tagline { display: none; }
+  .brand-mark { width: 30px; height: 30px; }
+  .brand-name { font-size: 19px; }
   .sidebar-foot { flex-direction: row; margin: 0 0 0 auto; }
   .sidebar-foot .nav-btn { width: auto; }
   #themeBtn .nav-label, #accountBtn .nav-label, .nav-hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

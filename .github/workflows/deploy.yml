@@ -1,5 +1,7 @@
-# Builds the site and publishes it to GitHub Pages on every push to main.
-# One-time setup: repo Settings → Pages → Source: "GitHub Actions".
+# Tests and builds the site on every push to main, then publishes the built
+# files to the gh-pages branch, which GitHub Pages serves.
+# One-time setup: repo Settings → Pages → Source: "Deploy from a branch",
+# Branch: gh-pages, folder: / (root).
 name: Deploy to GitHub Pages
 
 on:
@@ -8,16 +10,14 @@ on:
   workflow_dispatch: # allows a manual run from the Actions tab
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write # to push the built site to the gh-pages branch
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -28,17 +28,14 @@ jobs:
       - run: npm ci
       - run: npm test # a failing test stops a broken version from going live
       - run: npm run build
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v4
-        with:
-          path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Publish dist/ to the gh-pages branch
+        working-directory: dist
+        run: |
+          touch .nojekyll # serve the files as they are, without Jekyll
+          git init -q -b gh-pages
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Deploy ${{ github.sha }}"
+          # gh-pages only ever holds the latest build, so it is replaced each time.
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages

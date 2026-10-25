@@ -151,9 +151,9 @@ npm run build     # production build in dist/
 
 ## Deploy (free, automatic)
 
-The site is published to **GitHub Pages** by `.github/workflows/deploy.yml`. Every push to `main` runs the tests, builds, and redeploys. If a test fails, the live site stays on the last working version.
+The site is published to **GitHub Pages** by `.github/workflows/deploy.yml`. Every push to `main` runs the tests, builds, and publishes the built files to the `gh-pages` branch. If a test fails, the live site stays on the last working version.
 
-One-time setup: in the repo, open **Settings → Pages** and set **Source** to **GitHub Actions**. The live link is https://deepanshi-code.github.io/KeyForge/.
+One-time setup: in the repo, open **Settings → Pages**, set **Source** to **Deploy from a branch**, and choose **gh-pages** / **(root)**. The live link is https://deepanshi-code.github.io/KeyForge/.
 
 Open it on your phone and choose **Install / Add to Home screen** to use it like an app, offline too.
 

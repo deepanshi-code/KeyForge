@@ -85,3 +85,41 @@ describe("switchable store", () => {
     expect(library.favourites().map(f => f.value)).toEqual(["guest_pick"]);
   });
 });
+
+describe("encrypted backups", () => {
+  it("restores a backup on another device with the right password", async () => {
+    const thisDevice = createProfiles(memoryStore(), ROUNDS);
+    const { session } = await thisDevice.create("Deepa", "correct horse");
+    createLibrary(session.store, NO_SECRETS).toggleFavourite("username", "vesper_flux");
+    const file = await thisDevice.backup(session);
+
+    const otherDevice = createProfiles(memoryStore(), ROUNDS);
+    const restored = await otherDevice.restore(file, "correct horse");
+    expect(restored?.profile.name).toBe("Deepa");
+    expect(createLibrary(restored!.store, NO_SECRETS).favourites().map(f => f.value)).toEqual(["vesper_flux"]);
+    expect(otherDevice.list()).toHaveLength(1);
+  });
+
+  it("keeps the backup file unreadable without the password", async () => {
+    const device = memoryStore();
+    const profiles = createProfiles(device, ROUNDS);
+    const { session } = await profiles.create("Deepa", "correct horse");
+    createLibrary(session.store, NO_SECRETS).toggleFavourite("username", "vesper_flux");
+    const file = await profiles.backup(session);
+    expect(file).not.toContain("vesper_flux");
+    expect(await createProfiles(memoryStore(), ROUNDS).restore(file, "wrong horse")).toBeNull();
+  });
+
+  it("renames a restored profile if the name is already used", async () => {
+    const device = memoryStore();
+    const profiles = createProfiles(device, ROUNDS);
+    const { session } = await profiles.create("Deepa", "correct horse");
+    const restored = await profiles.restore(await profiles.backup(session), "correct horse");
+    expect(restored?.profile.name).toBe("Deepa (2)");
+  });
+
+  it("rejects files that aren't backups", async () => {
+    await expect(createProfiles(memoryStore(), ROUNDS).restore("{}", "x")).rejects.toThrow(ProfileError);
+    await expect(createProfiles(memoryStore(), ROUNDS).restore("not json", "x")).rejects.toThrow(ProfileError);
+  });
+});

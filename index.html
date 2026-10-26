@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#fafaf9">
   <title>KeyForge</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <!-- Apply a saved light/dark choice before first paint, so the page never flashes the wrong theme. -->
   <script>
@@ -34,7 +34,7 @@ npm run dev</pre>
       <a class="brand" href="#">
         <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
           <rect width="32" height="32" rx="8" />
-          <path d="M8 9h3v14H8zM11 15.2 18.6 9h4.1l-9.5 7.8zM13.2 15.2 22.7 23h-4.1L11 16.8z" />
+          <path d="M8 9h3v14H8zM11 15.2 18.6 9h4.1l-9.5 7.8zM13.2 15.2 22.7 23h-4.1L11 16.8zM10.5 14.6 14.4 16l-3.9 1.4z" />
         </svg>
         <span class="brand-text">
           <span class="brand-name">Key<span class="brand-forge">Forge</span><svg class="brand-spark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z" /></svg></span>
@@ -99,6 +99,7 @@ npm run dev</pre>
                 <span class="toggle-label">Learn my taste</span>
               </label>
               <button type="button" id="copyAllBtn" class="btn">Copy all</button>
+              <button type="button" id="csvBtn" class="btn" title="Download 100 results as a spreadsheet file, e.g. for test data">CSV</button>
               <button type="button" id="regenBtn" class="btn primary">Regenerate <kbd>R</kbd></button>
             </div>
           </div>
@@ -137,6 +138,7 @@ npm run dev</pre>
     <div class="lib-actions">
       <button type="button" id="exportBtn" class="btn small">Export</button>
       <button type="button" id="importBtn" class="btn small">Import</button>
+      <button type="button" id="backupBtn" class="btn small" title="Download an encrypted backup of this profile. Only its password can open it." hidden>Backup</button>
       <button type="button" id="clearBtn" class="btn small danger">Clear</button>
       <input type="file" id="importFile" accept="application/json,.json" hidden>
     </div>
@@ -166,6 +168,7 @@ npm run dev</pre>
           <button type="button" id="authReveal" class="icon-btn" aria-label="Show password" aria-pressed="false"></button>
         </div>
         <small id="capsNote" class="help caps-note" hidden>Caps Lock is on</small>
+        <small id="authStrength" class="help auth-strength" aria-live="polite" hidden></small>
       </div>
       <div id="authConfirmField" class="field">
         <label for="authConfirm">Confirm password</label>
@@ -179,6 +182,8 @@ npm run dev</pre>
       <div class="auth-links">
         <button type="button" id="authSwitch" class="link-btn">Create a new profile</button>
         <button type="button" id="authGuest" class="link-btn muted-link">Continue without signing in</button>
+        <button type="button" id="authRestore" class="link-btn">Restore from a backup file</button>
+        <input type="file" id="authRestoreFile" accept="application/json,.json" hidden>
       </div>
       <p class="auth-note">Profiles live only in this browser. Saved names are encrypted with your password, so nobody else using this device can see them.</p>
       <button type="button" id="authDelete" class="link-btn danger-link">Forgot your password? Delete this profile</button>

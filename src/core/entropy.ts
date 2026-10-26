@@ -25,3 +25,27 @@ export function strengthNote(bits: number): ResultNote {
     tone,
   };
 }
+
+/** Passwords so common that attackers try them first, whatever their length. */
+const COMMON = ["password", "12345678", "123456789", "qwerty", "iloveyou", "admin", "welcome", "letmein", "abc123", "football"];
+
+/**
+ * Rough strength of a password a person chose (not one we generated, whose
+ * entropy we know exactly). Counts the character types used, then subtracts
+ * for the patterns people use most: common passwords, repeats and sequences.
+ */
+export function chosenPasswordStrength(password: string): { score: 0 | 1 | 2 | 3; label: string } {
+  const lower = password.toLowerCase();
+  if (password.length < 8 || COMMON.some(c => lower.includes(c))) return { score: 0, label: "Weak" };
+  let pool = 0;
+  if (/[a-z]/.test(password)) pool += 26;
+  if (/[A-Z]/.test(password)) pool += 26;
+  if (/[0-9]/.test(password)) pool += 10;
+  if (/[^a-zA-Z0-9]/.test(password)) pool += 32;
+  let bits = entropyBits(password.length, pool);
+  if (/(.)\1\1/.test(password)) bits -= 10; // "aaa"
+  if (/(?:abc|bcd|cde|123|234|345|456|567|678|789)/i.test(password)) bits -= 10; // runs
+  if (bits < 40) return { score: 1, label: "Fair" };
+  if (bits < 60) return { score: 2, label: "Good" };
+  return { score: 3, label: "Strong" };
+}

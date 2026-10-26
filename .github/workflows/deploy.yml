@@ -26,7 +26,12 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm test # a failing test stops a broken version from going live
+      # Any failing check stops a broken version from going live.
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e # real browser: profiles, shortcuts, platform rules, accessibility (axe)
       - run: npm run build
       - name: Publish dist/ to the gh-pages branch
         working-directory: dist

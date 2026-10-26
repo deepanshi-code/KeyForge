@@ -24,6 +24,7 @@ export const MAX_NAME_LENGTH = 30;
 const PROFILES_KEY = "toolkit:profiles";
 const vaultKey = (id: string) => `toolkit:vault:${id}`;
 /** Where saved items lived, unencrypted, before profiles existed. Moved into the first new profile. */
+const BACKUP_FORMAT = "keyforge-backup";
 export const LEGACY_KEYS = ["toolkit:favourites", "toolkit:history", "toolkit:stats"] as const;
 
 export interface Profile {
@@ -243,6 +244,52 @@ export function createProfiles(device: KeyValueStore, iterations = PBKDF2_ITERAT
       } catch {
         return null; // wrong password (decryption failed)
       }
+    },
+
+    /**
+     * An encrypted backup file: the profile's salt plus its already-encrypted
+     * items. Safe to keep anywhere — it can only be opened with the password.
+     */
+    async backup(session: Session): Promise<string> {
+      await session.saved();
+      const sealed = JSON.parse(device.getItem(vaultKey(session.profile.id)) ?? "null") as Sealed | null;
+      const { name, salt, iterations } = session.profile;
+      return JSON.stringify({ format: BACKUP_FORMAT, version: 1, profile: { name, salt, iterations }, vault: sealed }, null, 2);
+    },
+
+    /** Restores a backup as a new profile on this device. Returns null if the password is wrong. */
+    async restore(text: string, password: string): Promise<Session | null> {
+      let file: { format?: unknown; profile?: Partial<Profile>; vault?: Sealed | null };
+      try {
+        file = JSON.parse(text);
+      } catch {
+        throw new ProfileError("That file isn't a KeyForge backup.");
+      }
+      const p = file.profile;
+      if (file.format !== BACKUP_FORMAT || !p || typeof p.salt !== "string" || typeof p.iterations !== "number" || !file.vault) {
+        throw new ProfileError("That file isn't a KeyForge backup.");
+      }
+      const key = await deriveKey(password, fromBase64(p.salt), p.iterations);
+      let items: Record<string, string>;
+      try {
+        items = JSON.parse(await unseal(key, file.vault)) as Record<string, string>;
+      } catch {
+        return null; // wrong password
+      }
+      const profiles = list();
+      const base = (typeof p.name === "string" && p.name.trim()) || "Restored profile";
+      let name = base;
+      for (let n = 2; profiles.some(x => x.name.toLowerCase() === name.toLowerCase()); n++) name = `${base} (${n})`;
+      const profile: Profile = {
+        id: toBase64(randomBytes(9)).replace(/[+/=]/g, "x"),
+        name: name.slice(0, MAX_NAME_LENGTH),
+        salt: p.salt,
+        iterations: p.iterations,
+        createdAt: Date.now(),
+      };
+      device.setItem(vaultKey(profile.id), JSON.stringify(file.vault));
+      device.setItem(PROFILES_KEY, JSON.stringify([...profiles, profile]));
+      return openSession(profile, key, items);
     },
 
     /** Deletes a profile and its saved items. Can't be undone. */

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { KeyValueStore } from "./library.ts";
 import { seededRng } from "./rng.ts";
 import { createStats } from "./stats.ts";
-import { EXPLORE_SHARE, rankByTaste, trainTaste } from "./taste.ts";
+import { EXPLORE_SHARE, rankByTaste, similarFavourites, trainTaste } from "./taste.ts";
 
 describe("taste model", () => {
   const model = trainTaste(["umbral_kestrel", "astral_osprey", "lunar_heron", "sable_magpie"]);
@@ -39,19 +39,49 @@ describe("rankByTaste", () => {
     expect(new Set(ranked.map(r => r.value)).size).toBe(6);
   });
 
-  it("puts the best matches first and keeps some exploration", () => {
+  it("mixes taste picks with a random baseline, in shuffled order", () => {
     const ranked = rankByTaste(pool, model, 8, seededRng("explore"));
     const taste = ranked.filter(r => r.source === "taste");
     const explore = ranked.filter(r => r.source === "explore");
-    expect(taste).toHaveLength(Math.ceil(8 * (1 - EXPLORE_SHARE)));
-    expect(explore.length).toBeGreaterThan(0);
-    // Taste picks are ordered best-first and beat every exploration pick.
-    for (let i = 1; i < taste.length; i++) expect(taste[i - 1].match).toBeGreaterThanOrEqual(taste[i].match);
-    expect(Math.min(...taste.map(r => r.match))).toBeGreaterThanOrEqual(Math.max(...explore.map(r => r.match)));
+    expect(explore).toHaveLength(Math.round(8 * EXPLORE_SHARE));
+    expect(taste).toHaveLength(8 - explore.length);
+    // Taste picks are the best-scoring candidates that weren't drawn at random.
+    const others = pool.filter(v => !explore.some(e => e.value === v));
+    const bestOthers = [...others].sort((a, b) => model.score(b) - model.score(a)).slice(0, taste.length);
+    expect(taste.map(t => t.value).sort()).toEqual(bestOthers.sort());
+  });
+
+  it("draws the random picks from the whole pool, so they are a fair baseline", () => {
+    // If random picks came only from leftovers, the best candidate could never be one.
+    const best = [...pool].sort((a, b) => model.score(b) - model.score(a))[0];
+    let bestWasRandom = 0;
+    for (let i = 0; i < 300; i++) {
+      if (rankByTaste(pool, model, 8, seededRng(`fair${i}`)).some(r => r.source === "explore" && r.value === best)) bestWasRandom++;
+    }
+    // Expected about 2/12 of the time.
+    expect(bestWasRandom).toBeGreaterThan(20);
+  });
+
+  it("doesn't always put taste picks first (no position advantage)", () => {
+    const firstSources = new Set<string>();
+    for (let i = 0; i < 50; i++) firstSources.add(rankByTaste(pool, model, 8, seededRng(`pos${i}`))[0].source);
+    expect(firstSources).toEqual(new Set(["taste", "explore"]));
   });
 
   it("copes with a pool smaller than the request", () => {
     expect(rankByTaste(["a", "b"], model, 5, seededRng("small"))).toHaveLength(2);
+  });
+});
+
+describe("similarFavourites", () => {
+  it("names the favourites a result most resembles", () => {
+    const favs = ["vesper_flux", "sable_comet", "brick_tractor"];
+    expect(similarFavourites("vesper_comet", favs)).toEqual(expect.arrayContaining(["vesper_flux", "sable_comet"]));
+    expect(similarFavourites("vesper_comet", favs)).not.toContain("brick_tractor");
+  });
+
+  it("returns nothing when no favourite is similar", () => {
+    expect(similarFavourites("zzz", ["abc"])).toEqual([]);
   });
 });
 
@@ -76,7 +106,7 @@ describe("stats", () => {
 
   it("survives corrupted storage", () => {
     const store = memory();
-    store.setItem("toolkit:stats", "{broken");
+    store.setItem("toolkit:stats:v2", "{broken");
     expect(createStats(store).summary().random.shown).toBe(0);
   });
 });

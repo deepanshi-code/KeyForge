@@ -1,14 +1,14 @@
 import type { Library } from "../core/library.ts";
 import { findGenerator } from "../core/registry.ts";
-import type { Stats } from "../core/stats.ts";
+import { twoProportionPValue, wilsonInterval, type Stats } from "../core/stats.ts";
 import { byId, copyText, h } from "./dom.ts";
 import { icon } from "./icons.ts";
 import { toast } from "./toast.ts";
 
 type Tab = "favourites" | "history" | "insights";
 
-/** Results needed in each mode before the comparison means much. */
-const MIN_SAMPLE = 30;
+/** Results needed in each group (taste, random) before the comparison means much. */
+const MIN_SAMPLE = 20;
 
 const percent = (rate: number | null) => (rate === null ? "—" : `${Math.round(rate * 100)}%`);
 
@@ -44,38 +44,41 @@ export function setupLibraryDrawer(library: Library, stats: Stats, onChange: () 
 
   const isOpen = () => !drawer.hidden;
 
-  /** Compares star rates with and without taste learning — evidence, not a claim. */
+  /** Compares star rates of taste picks and random picks shown side by side — evidence, not a claim. */
   function renderInsights(): void {
     const s = stats.summary();
+    const range = (c: typeof s.taste) => {
+      if (c.shown === 0) return "no data yet";
+      const [low, high] = wilsonInterval(c.starred, c.shown);
+      return `${c.starred} of ${c.shown} · likely ${percent(low)}–${percent(high)}`;
+    };
     const card = (label: string, c: typeof s.taste) =>
       h("div", { class: "stat-card" },
         h("span", { class: "stat-label" }, label),
         h("span", { class: "stat-value" }, percent(c.rate)),
-        h("span", { class: "muted small" }, `${c.starred} starred of ${c.shown} shown`),
+        h("span", { class: "muted small" }, range(c)),
       );
 
-    const taste = s.taste.rate ?? 0;
-    const random = s.random.rate ?? 0;
+    const p = twoProportionPValue(s.taste, s.random);
     let verdict: string;
     if (s.taste.shown < MIN_SAMPLE || s.random.shown < MIN_SAMPLE) {
-      verdict = `Keep going: with fewer than ${MIN_SAMPLE} results in each mode, any difference could easily be chance. ` +
-        "Turn “Learn my taste” off now and then so both modes get measured.";
-    } else if (taste > random * 1.2) {
-      verdict = random > 0
-        ? `Taste learning is working: you star ${(taste / random).toFixed(1)}× as often when results are ranked by your taste.`
-        : "Taste learning is working: you've starred taste-ranked results, but none of the random ones.";
-    } else if (taste < random * 0.8) {
-      verdict = "Random results are getting more stars right now, so taste learning isn't helping yet.";
+      const need = Math.max(0, MIN_SAMPLE - s.taste.shown) + Math.max(0, MIN_SAMPLE - s.random.shown);
+      verdict = `Not enough data yet: about ${need} more results need to be shown with taste learning on. Keep starring the names you genuinely like.`;
+    } else if (p !== null && p < 0.05) {
+      verdict = (s.taste.rate ?? 0) > (s.random.rate ?? 0)
+        ? `Taste learning is working: you star taste picks more often, and a difference this big would happen by luck only ${(p * 100).toFixed(1)}% of the time.`
+        : `Random picks are getting more stars, and that's unlikely to be luck (p = ${p.toFixed(3)}). Taste learning isn't helping for you yet.`;
     } else {
-      verdict = "No clear difference: you star taste-ranked and random results at a similar rate.";
+      verdict = `No clear difference yet (p = ${p?.toFixed(2) ?? "—"}). The gap could still be luck, so keep going.`;
     }
 
     list.replaceChildren(h("li", { class: "insights" },
       h("p", { class: "muted small" },
-        "How often you star a result, counted once you have 3+ favourites (so both modes are compared fairly). " +
-        "If taste learning works, the first number should be higher."),
-      h("div", { class: "stat-grid" }, card("With taste learning", s.taste), card("Without", s.random)),
+        "A fair test: every taste-learning batch secretly mixes the best matches with a few names picked at random " +
+        "from the same candidates, in shuffled order. If learning works, you'll star the taste picks more often."),
+      h("div", { class: "stat-grid" }, card("Taste picks starred", s.taste), card("Random picks starred", s.random)),
       h("p", { class: "verdict" }, verdict),
+      h("p", { class: "muted small" }, "“Likely” is a 95% range (Wilson interval). The verdict uses a two-proportion z-test."),
     ));
   }
 
@@ -83,7 +86,7 @@ export function setupLibraryDrawer(library: Library, stats: Stats, onChange: () 
     const favourites = library.favourites();
     badge.textContent = String(favourites.length);
     badge.hidden = favourites.length === 0;
-    tabs.forEach(t => t.setAttribute("aria-pressed", String(t.dataset.tab === tab)));
+    for (const t of tabs) t.setAttribute("aria-pressed", String(t.dataset.tab === tab));
     byId("exportBtn").hidden = tab === "insights";
     byId("importBtn").hidden = tab === "insights";
 
@@ -130,10 +133,12 @@ export function setupLibraryDrawer(library: Library, stats: Stats, onChange: () 
     if (e.key === "Escape" && isOpen()) close();
   });
 
-  tabs.forEach(t => t.addEventListener("click", () => {
-    tab = (t.dataset.tab as Tab | undefined) ?? "favourites";
-    render();
-  }));
+  for (const t of tabs) {
+    t.addEventListener("click", () => {
+      tab = (t.dataset.tab as Tab | undefined) ?? "favourites";
+      render();
+    });
+  }
 
   byId("exportBtn").addEventListener("click", () => {
     const blob = new Blob([library.exportJson()], { type: "application/json" });

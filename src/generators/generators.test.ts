@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { chosenPasswordStrength } from "../core/entropy.ts";
 import { seededRng } from "../core/rng.ts";
 import { GenerationError } from "../core/types.ts";
 import { validateOptions } from "../core/validate.ts";
@@ -10,7 +11,7 @@ import { passwordGenerator, type PasswordOptions } from "./password.ts";
 import { personNameGenerator } from "./person-name.ts";
 import { blend, projectNameGenerator } from "./project-name.ts";
 import { teamNameGenerator } from "./team-name.ts";
-import { usernameGenerator } from "./username.ts";
+import { PLATFORMS, usernameGenerator } from "./username.ts";
 
 const many = (n: number, fn: () => string) => Array.from({ length: n }, fn);
 
@@ -78,6 +79,27 @@ describe("username", () => {
         }
       }
     }
+  });
+
+  it("follows each platform's rules", () => {
+    for (const [id, platform] of Object.entries(PLATFORMS)) {
+      for (const separator of ["none", "underscore", "dot", "hyphen"]) {
+        const rng = seededRng(id + separator);
+        const opts = { ...base, platform: id, separator, numbers: true, maxLength: 39 };
+        for (const u of many(80, () => usernameGenerator.generate(opts, rng))) {
+          expect(u.length).toBeLessThanOrEqual(platform.max);
+          expect(u.length).toBeGreaterThanOrEqual(platform.min);
+          expect(u).toMatch(platform.valid);
+        }
+      }
+    }
+  });
+
+  it("uses a hyphen on GitHub instead of an underscore", () => {
+    const rng = seededRng("gh");
+    const names = many(50, () => usernameGenerator.generate({ ...base, platform: "github", separator: "underscore" }, rng));
+    expect(names.some(u => u.includes("-"))).toBe(true);
+    expect(names.every(u => !u.includes("_"))).toBe(true);
   });
 
   it("builds around the user's first name", () => {
@@ -241,5 +263,18 @@ describe("persona", () => {
       // The username is built around the persona's first name.
       expect(handle.toLowerCase()).toContain(first.slice(0, 3));
     }
+  });
+});
+
+describe("chosen password strength", () => {
+  it("calls short and common passwords weak", () => {
+    expect(chosenPasswordStrength("short").label).toBe("Weak");
+    expect(chosenPasswordStrength("MyPassword99!").label).toBe("Weak");
+  });
+
+  it("rewards length and variety, and penalises repeats and runs", () => {
+    expect(chosenPasswordStrength("lowercase").score).toBeLessThan(chosenPasswordStrength("Mixed-Case-9x!Words").score);
+    expect(chosenPasswordStrength("Tr0ub4dor&3xyz").score).toBe(3);
+    expect(chosenPasswordStrength("aaabbb12").score).toBeLessThan(2);
   });
 });

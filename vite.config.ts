@@ -13,7 +13,7 @@ function inlineIntoHtml(): Plugin {
     enforce: "post",
     generateBundle(_options, bundle) {
       const html = bundle["index.html"];
-      if (!html || html.type !== "asset") return;
+      if (html?.type !== "asset") return;
       let source = String(html.source);
 
       for (const [fileName, file] of Object.entries(bundle)) {

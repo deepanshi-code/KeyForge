@@ -10,6 +10,7 @@ import {
 
 export type UsernameOptions = {
   style: string;
+  platform: string;
   uniqueness: string;
   name: string;
   interest: string;
@@ -18,7 +19,31 @@ export type UsernameOptions = {
   maxLength: number;
 };
 
-const SEPARATORS: Record<string, string> = { none: "", underscore: "_", dot: "." };
+const SEPARATORS: Record<string, string> = { none: "", underscore: "_", dot: ".", hyphen: "-" };
+
+/**
+ * Each platform's username rules, so results can be used as they are.
+ * `separator` replaces a chosen separator the platform doesn't allow.
+ */
+interface Platform {
+  min: number;
+  max: number;
+  allowed: string;
+  separator: string;
+  valid: RegExp;
+}
+
+export const PLATFORMS: Record<string, Platform> = {
+  any: { min: 3, max: 39, allowed: "_.-", separator: "_", valid: /^[a-z0-9._-]+$/ },
+  // Letters, numbers, periods and underscores; no period at the start or end, no "..".
+  instagram: { min: 3, max: 30, allowed: "_.", separator: "_", valid: /^(?!\.)(?!.*\.\.)[a-z0-9._]+(?<!\.)$/ },
+  // Letters, numbers and underscores, 4–15 characters.
+  x: { min: 4, max: 15, allowed: "_", separator: "_", valid: /^[a-z0-9_]+$/ },
+  // Letters, numbers and single hyphens, not at the start or end, up to 39 characters.
+  github: { min: 3, max: 39, allowed: "-", separator: "-", valid: /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9]))*$/ },
+  // Letters, numbers, periods and underscores, 2–32 characters, no "..".
+  discord: { min: 3, max: 32, allowed: "_.", separator: "_", valid: /^(?!.*\.\.)[a-z0-9._]+$/ },
+};
 const MIN_LENGTH = 3;
 const MAX_ATTEMPTS = 120;
 
@@ -129,6 +154,17 @@ export const usernameGenerator: Generator<UsernameOptions> = {
         { value: "cute", label: "Cute" },
       ],
     },
+    {
+      kind: "select", key: "platform", label: "Platform",
+      choices: [
+        { value: "any", label: "Any platform" },
+        { value: "instagram", label: "Instagram (up to 30)" },
+        { value: "x", label: "X / Twitter (up to 15)" },
+        { value: "github", label: "GitHub (up to 39)" },
+        { value: "discord", label: "Discord (up to 32)" },
+      ],
+      help: "Results follow that platform's length and character rules.",
+    },
     UNIQUENESS_FIELD,
     { kind: "text", key: "name", label: "Your name (optional)", placeholder: "e.g. Deepa", maxLength: 40, help: "Only the first word is used." },
     { kind: "text", key: "interest", label: "An interest (optional)", placeholder: "e.g. chess", maxLength: 20 },
@@ -138,35 +174,43 @@ export const usernameGenerator: Generator<UsernameOptions> = {
         { value: "none", label: "None" },
         { value: "underscore", label: "Underscore _" },
         { value: "dot", label: "Dot ." },
+        { value: "hyphen", label: "Hyphen -" },
       ],
     },
-    { kind: "number", key: "maxLength", label: "Max length", min: 6, max: 30, help: "Instagram allows 30, X allows 15." },
+    { kind: "number", key: "maxLength", label: "Max length", min: 6, max: 39, help: "The platform's own limit applies if it's shorter." },
     { kind: "boolean", key: "numbers", label: "Add numbers" },
   ],
   defaults: {
-    style: "professional", uniqueness: "rare", name: "", interest: "",
+    style: "professional", platform: "any", uniqueness: "rare", name: "", interest: "",
     separator: "underscore", numbers: false, maxLength: 18,
   },
 
   generate(opts, rng) {
+    const platform = PLATFORMS[opts.platform] ?? PLATFORMS.any;
+    const maxLength = Math.min(opts.maxLength, platform.max);
     const name = cleanWord(opts.name.trim().split(/\s+/)[0] ?? "");
     const interest = cleanWord(opts.interest);
     const digits = opts.numbers ? 2 : 0;
+    const chosen = SEPARATORS[opts.separator] ?? "";
+    const separator = chosen === "" || platform.allowed.includes(chosen) ? chosen : platform.separator;
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       // If the separator keeps making names too long, try the second half without it.
-      const sep = attempt < MAX_ATTEMPTS / 2 ? (SEPARATORS[opts.separator] ?? "") : "";
-      const parts = buildParts(opts, name, interest, opts.maxLength - digits - sep.length, rng);
+      const sep = attempt < MAX_ATTEMPTS / 2 ? separator : "";
+      const parts = buildParts(opts, name, interest, maxLength - digits - sep.length, rng);
       if (!parts) continue;
       let username = parts.join(sep);
       // Two digits (10–99): avoids looking like a birth year, which leaks personal info.
       if (opts.numbers) username += String(10 + rng.int(90));
-      if (username.length >= MIN_LENGTH && username.length <= opts.maxLength && isClean(username)) {
+      if (
+        username.length >= Math.max(MIN_LENGTH, platform.min) && username.length <= maxLength &&
+        platform.valid.test(username) && isClean(username)
+      ) {
         return username;
       }
     }
     throw new GenerationError(
-      `Couldn't make a suitable username within ${opts.maxLength} characters. Try a longer max length or a different name.`,
+      `Couldn't make a suitable username within ${maxLength} characters. Try a longer max length or a different name.`,
     );
   },
 };

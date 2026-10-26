@@ -11,7 +11,10 @@ import type { Rng } from "./rng.ts";
  * term prefers names of a similar length.
  */
 export const MIN_FAVOURITES = 3;
-/** Share of results that are deliberately NOT taste-ranked, so new styles still appear. */
+/**
+ * Share of results picked at random instead of by taste. They keep new styles
+ * appearing and act as the baseline that taste picks are measured against.
+ */
 export const EXPLORE_SHARE = 0.25;
 /** How many candidates to generate per result when ranking by taste. */
 export const POOL_FACTOR = 6;
@@ -76,27 +79,57 @@ export interface RankedResult {
   value: string;
   /** 0–100: where this candidate's score falls among the whole pool. */
   match: number;
-  /** "taste" = picked for similarity, "explore" = picked at random on purpose. */
+  /** "taste" = picked for similarity, "explore" = picked uniformly at random from the same pool. */
   source: "taste" | "explore";
 }
 
 /**
- * Picks `count` results from a larger candidate pool: most are the best taste
- * matches, the rest are random picks from the remainder (exploration), so the
- * user isn't stuck seeing only one kind of name.
+ * Picks `count` results from a larger candidate pool and mixes two groups,
+ * so the batch doubles as a fair experiment (interleaving, as search engines
+ * use to compare rankings):
+ *   - explore: EXPLORE_SHARE of the results, drawn uniformly at random from
+ *     the WHOLE pool — a true "no learning" baseline, not leftovers.
+ *   - taste: the best-scoring candidates among the rest.
+ * The final order is shuffled, so neither group gets the top positions.
+ * Comparing how often each group is starred then shows whether learning helps.
  */
 export function rankByTaste(candidates: readonly string[], model: TasteModel, count: number, rng: Rng): RankedResult[] {
-  const scored = candidates.map(value => ({ value, score: model.score(value) }));
-  const byScore = [...scored].sort((a, b) => b.score - a.score);
+  const byScore = candidates.map(value => ({ value, score: model.score(value) })).sort((a, b) => b.score - a.score);
   const percentile = new Map(byScore.map((c, i) => [c.value, Math.round(100 * (1 - i / Math.max(1, byScore.length - 1)))]));
+  const total = Math.min(count, byScore.length);
+  const exploreCount = Math.min(total, Math.round(total * EXPLORE_SHARE));
 
-  const tasteCount = Math.min(byScore.length, Math.ceil(count * (1 - EXPLORE_SHARE)));
-  const picked: RankedResult[] = byScore.slice(0, tasteCount)
-    .map(c => ({ value: c.value, match: percentile.get(c.value) ?? 0, source: "taste" }));
+  const explore = new Set(rng.shuffle(byScore.map(c => c.value)).slice(0, exploreCount));
+  const taste = byScore.filter(c => !explore.has(c.value)).slice(0, total - exploreCount).map(c => c.value);
 
-  const rest = rng.shuffle(byScore.slice(tasteCount));
-  for (const c of rest.slice(0, count - picked.length)) {
-    picked.push({ value: c.value, match: percentile.get(c.value) ?? 0, source: "explore" });
-  }
-  return picked;
+  const result = (value: string, source: RankedResult["source"]): RankedResult =>
+    ({ value, match: percentile.get(value) ?? 0, source });
+  return rng.shuffle([...taste.map(v => result(v, "taste")), ...[...explore].map(v => result(v, "explore"))]);
+}
+
+/** Trigrams of a value, after the same normalisation the model uses. */
+function trigrams(value: string): Set<string> {
+  const text = ` ${normalise(value)} `;
+  const grams = new Set<string>();
+  for (let i = 0; i + 3 <= text.length; i++) grams.add(text.slice(i, i + 3));
+  return grams;
+}
+
+/**
+ * "Why this?": the favourites a result most resembles, by shared letter
+ * triples (Jaccard similarity). Makes the ranking explainable.
+ */
+export function similarFavourites(value: string, favourites: readonly string[], limit = 2): string[] {
+  const mine = trigrams(value);
+  return favourites
+    .map(fav => {
+      const theirs = trigrams(fav);
+      let shared = 0;
+      for (const g of mine) if (theirs.has(g)) shared++;
+      return { fav, similarity: shared / (mine.size + theirs.size - shared || 1) };
+    })
+    .filter(x => x.similarity > 0)
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, limit)
+    .map(x => x.fav);
 }

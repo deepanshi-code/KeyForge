@@ -4,7 +4,9 @@
 
 **Live demo:** https://deepanshi-code.github.io/KeyForge/ · **Code:** https://github.com/deepanshi-code/KeyForge
 
-One private platform for naming your online identity and projects: **unique usernames, project names, team names, person names, complete personas and secure passwords**. It **learns your taste** from the names you star, works offline, and installs like an app. Everything runs in your browser: **password-protected profiles** keep your saved names encrypted on your device, and there's no server, so nothing is sent anywhere.
+One private platform for naming your online identity and projects: **unique usernames, project names, team names, person names, complete personas and secure passwords**. It **learns your taste** from the names you star, works offline, and installs like an app. Everything runs in your browser: **password-protected profiles** keep your saved names encrypted on your device, and there's no server. Nothing you generate leaves your device unless you click **Check** to see if a name is taken.
+
+**Who it's for:** students and developers who need a name they'll actually use (a GitHub or Instagram handle, a repo or app name, a hackathon team name) or realistic fake personas for test data, without signing up anywhere or handing their ideas to a server.
 
 > This started as a beginner password generator in plain HTML/CSS/JS and was rebuilt as a modular TypeScript app.
 
@@ -12,10 +14,10 @@ One private platform for naming your online identity and projects: **unique user
 
 | Generator | Highlights |
 |---|---|
-| 👤 **Username** | Professional / gamer / minimal / cute styles. Built around your name (`builtbydeepa`, `deepyx`) and interests. Fits any max length. |
+| 👤 **Username** | Professional / gamer / minimal / cute styles. Built around your name (`builtbydeepa`, `deepyx`) and interests. **Platform presets** follow the real rules of Instagram, X, GitHub and Discord (length, allowed characters, no `..` or edge hyphens). |
 | 🚀 **Project name** | From your keywords, with five naming techniques (below). PascalCase / lowercase / kebab-case. |
 | 🏆 **Team name** | Six themes (tech, esports, sports, space, mythology, general). The **team member count** shapes the name: *Quantum Quartet*, *Trio of Titans*, *The Five Phoenixes*, *Krakens VII*. Alliteration. |
-| 🎭 **Persona** | Combines the other generators into one fake identity: `Thea Ashford · @hellothea · thea.ashford@example.com`. Uses `example.com` (reserved for testing, RFC 2606), so emails can never reach a real person. |
+| 🎭 **Persona** | Combines the other generators into one fake identity: `Thea Ashford · @hellothea · thea.ashford@example.com`. Uses `example.com` (reserved for testing, RFC 2606), so emails can never reach a real person. **Download 100 as CSV** (name, username, email) for test data. |
 | 🪪 **Person name** | Indian and international names, filtered by gender. Common, uncommon or **invented** first names. |
 | 🔐 **Password** | `crypto.getRandomValues()` with rejection sampling. Every selected character type guaranteed. Strength meter based on entropy. |
 
@@ -23,16 +25,20 @@ One private platform for naming your online identity and projects: **unique user
 Star 3 or more names and the app starts learning what you like:
 1. It generates **6× more candidates** than you asked for.
 2. A small **character-trigram model trained only on your favourites** scores each candidate by how much it "sounds like" them, with a nudge towards similar lengths.
-3. **75%** of results are the best matches, labelled *Top N%*. **25%** are random on purpose (*Explore*), so you still see new styles and don't get stuck in a bubble.
+3. **75%** of results are the best matches. **25%** are drawn at random from the same candidates, so you still see new styles and don't get stuck in a bubble. The two are shuffled together.
+4. **"Why this?"** Each result says which favourites it resembles (*Similar to sapphire_comet, sable_tanuki*), using shared letter-triples (Jaccard similarity).
 
 Example: after starring `sapphire_comet`, `sable_tanuki` and `iridescent_orca`, the next batch was `sapphire_ember`, `sapphire_wyvern`, `sable_axolotl`, `sable_paradox`, plus one exploration pick.
 
 Nothing leaves your device. The model is rebuilt from your favourites each time, in milliseconds.
 
-### 📈 Measured, not just claimed
-The **Insights** tab compares how often you star results **with** vs **without** taste learning. It works like a small A/B test you run on yourself:
-- **Counting starts at 3 favourites.** Before that, learning can't be on, so counting those results would unfairly favour random mode. This bias was found and fixed during testing.
-- **It won't draw conclusions early.** Below 30 results per mode, it tells you any difference could be chance.
+### 📈 Measured, not just claimed — with a fair test
+The **Insights** tab answers "does taste learning actually help?" using **interleaving**, the method search engines use to compare rankings:
+- Every learning batch mixes **taste picks** with **random picks drawn from the whole candidate pool**, in **shuffled order**. Both groups are seen at the same moment, in random positions.
+- It's **blind**: results aren't labelled by group, and every result gets the same "Similar to…" explanation, so you can't tell which group a name came from.
+- Insights compares each group's star rate, shows a **95% range (Wilson interval)** for each, and runs a **two-proportion z-test**. It only says "taste learning is working" when p < 0.05, and asks for more data below 20 results per group.
+
+**How this was fixed, and why it matters.** The first version compared "learning on" with "learning off". That was biased twice over: the user decided when each mode ran (self-selection), and the random picks came only from the *lowest-ranked leftovers*, which made learning look better than it was. Both problems were found in review and replaced with the design above. Old statistics aren't carried over.
 
 ### 🔒 Private profiles (encrypted, no server)
 Opening the app shows a **sign-in screen**. Your favourites, history and insights stay locked until you sign in, so nobody else using the same browser can see them.
@@ -40,7 +46,12 @@ Opening the app shows a **sign-in screen**. Your favourites, history and insight
 - A wrong password is detected because AES-GCM decryption fails. The password itself is never stored.
 - Signing out, closing the tab or reloading locks everything again. Without signing in you can still generate. Stars are kept for that visit only, and they merge into your profile if you sign in.
 - Names saved before profiles existed are moved into the first profile you create, and the unencrypted copy is deleted.
-- **Limits:** profiles exist only in this browser (no sync between devices), and a forgotten password can't be recovered — the profile can only be deleted.
+- **Encrypted backup:** *Saved → Backup* downloads the profile's salt and its already-encrypted items. The file is useless without the password, and *Restore from a backup file* on the sign-in screen moves a profile to another device or browser.
+- **Auto-lock** after 15 minutes without activity. A **password strength meter** helps when creating a profile, flagging common passwords, repeats and runs.
+- **Limits:** no automatic sync between devices (use a backup), and a forgotten password can't be recovered — the profile can only be deleted.
+
+### 🌐 Is the name taken? (optional)
+Click the globe on a username or project name to check **GitHub** (users and orgs), **npm** (packages) and **.com** (via Google's public DNS-over-HTTPS). It calls those public APIs straight from your browser (still no KeyForge server), and only after you agree once, because the name is sent to them. Results are hints, not guarantees: rate-limited or offline shows as *couldn't check*, never as *free*.
 
 ### Uniqueness levels
 Name generators have a **Uniqueness** option:
@@ -65,7 +76,8 @@ Name generators have a **Uniqueness** option:
 - **Live results:** results update as you change options. Click any result to copy it (a check mark confirms), star it to save it, or **Copy all** to get the whole list, one per line. **Reset** puts the options back to their defaults.
 - **Keyboard:** **R** regenerates, **Enter** in a text box regenerates, **Esc** closes the drawer or dialog.
 - Usernames and project names show their length, so you can check platform limits at a glance. On phones, results appear above the options.
-- **Saved drawer:** favourites, history and insights, stored only in your browser, with JSON export and import. Passwords are never saved.
+- **Saved drawer:** favourites, history and insights, with JSON export and import and an encrypted backup. Passwords are never saved or exported.
+- **CSV download:** 100 results with the current options in one click (not for passwords). Values a spreadsheet would run as formulas are neutralised (CSV-injection safe).
 - **Installable and offline (PWA):** install it from the browser menu on phone or desktop. A service worker keeps a copy, so it works with no internet.
 - Works on phones, supports keyboard and screen readers, and turns animations off if your system asks for reduced motion.
 
@@ -118,7 +130,9 @@ src/
 ├── ui/            form builder, icons, theme toggle, drawer, toasts
 ├── styles/        main.css (light and dark themes are CSS custom properties)
 └── main.ts        wires the UI together
-public/            app manifest, icon, service worker (offline support)
+e2e/               browser tests (Playwright) and accessibility scans (axe)
+docs/              user-study kit
+public/            app manifest, icons, service worker (offline support)
 ```
 
 ## Run it
@@ -128,7 +142,9 @@ Requires Node.js 22.12 or later.
 ```bash
 npm install
 npm run dev       # http://localhost:5173
-npm test          # 89 tests
+npm test          # 130 unit tests
+npm run test:e2e  # 7 browser tests, incl. accessibility (first run: npx playwright install chromium)
+npm run lint      # Biome
 npm run build     # production build in dist/
 ```
 
@@ -138,20 +154,26 @@ npm run build     # production build in dist/
 
 ## Testing
 
-- **89 unit tests** (Vitest), including:
+- **130 unit tests** (Vitest), including:
   - chi-square uniformity tests for both random sources
   - a modulo-bias regression test
   - the Markov model never returning a training word
-  - the taste model ranking favourite-like names higher, and always keeping exploration picks
-  - star-rate statistics
+  - the taste model ranking favourite-like names higher; random picks drawn from the **whole** pool (the best candidate can be a random pick); no position advantage for taste picks
+  - Wilson intervals and the two-proportion z-test against known values
+  - platform rules for every platform × separator combination
+  - encryption at rest, wrong passwords, separate profiles, backup and restore
+  - CSV escaping and formula neutralising; availability checks never reporting "free" on errors
   - team names always reflecting the member count (2–12)
   - every theme, size and uniqueness combination
   - storage and import/export
 - **Contract tests** run every registered generator through the same checks: valid defaults, every option value works, out-of-range numbers are rejected, and output is clean.
+- **7 browser tests** (Playwright, on the production build): generate and regenerate with R; GitHub preset output; passwords never saved or exported; create profile → star → reload (locked) → wrong password refused → right password restores the favourite.
+- **Accessibility:** axe scans the main screen in light and dark mode and the sign-in dialog, and fails on any serious issue. Its first run found low-contrast small text and buttons whose spoken names didn't match their visible text; both were fixed.
+- **CI:** lint, typecheck, unit tests, browser tests and build must all pass before anything is deployed.
 
 ## Deploy (free, automatic)
 
-The site is published to **GitHub Pages** by `.github/workflows/deploy.yml`. Every push to `main` runs the tests, builds, and publishes the built files to the `gh-pages` branch. If a test fails, the live site stays on the last working version.
+The site is published to **GitHub Pages** by `.github/workflows/deploy.yml`. Every push to `main` runs lint, typecheck, unit and browser tests, builds, and publishes the built files to the `gh-pages` branch. If anything fails, the live site stays on the last working version.
 
 One-time setup: in the repo, open **Settings → Pages**, set **Source** to **Deploy from a branch**, and choose **gh-pages** / **(root)**. The live link is https://deepanshi-code.github.io/KeyForge/.
 
@@ -159,12 +181,13 @@ Open it on your phone and choose **Install / Add to Home screen** to use it like
 
 ## Limitations and roadmap
 
-- **Generated names may already be taken.** Uniqueness is guaranteed within a batch, not globally.
+- **Generated names may already be taken.** Uniqueness is guaranteed within a batch; the optional Check covers GitHub, npm and .com only.
 - **Some invented words are odd**, because the Markov model is small and character-based.
 - **The name lists are hand-written.** v2: a larger, licensed dataset.
 - **Taste learning only uses stars.** It doesn't learn from names you skip, and it needs a few favourites before it helps.
-- **Insights is a self-experiment with one user**, not a controlled study. A real evaluation would compare star rates across 10–20 people.
+- **Insights measures one person at a time.** It's a fair within-person test, but "taste learning helps people" needs a study across users: see the ready-to-run kit in [`docs/user-study.md`](docs/user-study.md). **Results: not run yet.**
 
 **v2 ideas:**
-- Availability check for project names (domain, GitHub, npm) through a rate-limited serverless function
+- Run the user study and publish the results here
 - Hindi interface
+- Learn from skipped names too, not just stars

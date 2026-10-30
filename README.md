@@ -15,7 +15,7 @@ One private platform for naming your online identity and projects: **unique user
 | Generator | Highlights |
 |---|---|
 | 👤 **Username** | Professional / gamer / minimal / cute styles. Built around your name (`builtbydeepa`, `deepyx`) and interests. **Platform presets** follow the real rules of Instagram, X, GitHub and Discord (length, allowed characters, no `..` or edge hyphens). |
-| 🚀 **Project name** | From your keywords, with five naming techniques (below). PascalCase / lowercase / kebab-case. |
+| 🚀 **Project name** | From your keywords, with six naming techniques (below), including **Hinglish** names like *Form Saathi*. PascalCase / lowercase / kebab-case / Title Case. |
 | 🏆 **Team name** | Six themes (tech, esports, sports, space, mythology, general). The **team member count** shapes the name: *Quantum Quartet*, *Trio of Titans*, *The Five Phoenixes*, *Krakens VII*. Alliteration. |
 | 🎭 **Persona** | Combines the other generators into one fake identity: `Thea Ashford · @hellothea · thea.ashford@example.com`. Uses `example.com` (reserved for testing, RFC 2606), so emails can never reach a real person. **Download 100 as CSV** (name, username, email) for test data. |
 | 🪪 **Person name** | Indian and international names, filtered by gender. Common, uncommon or **invented** first names. |
@@ -67,8 +67,11 @@ Name generators have a **Uniqueness** option:
 | Two words joined | Compound | **CodeForge** |
 | Prefix / suffix | Adds a start or ending | **Noteify**, **OmniNote** |
 | Latin & Greek roots | Classic-sounding roots | **LumenStack** |
+| Hinglish | One Hindi word + one English word, either way round. Each result explains the Hindi word (*saathi = companion*) | **Form Saathi**, **DukaanPay**, **YatraHub** |
 
 "Surprise me" mixes all of them, weighted towards invented words.
+
+The Hindi words are a hand-picked list of 50 common, positive words with plain meanings (`src/data/words.ts`). Words that hide inside everyday English words ("chai" in *chain*, "desi" in *design*) are left out, so a meaning is never shown for the wrong word.
 
 ### Interface
 - **Clean workbench layout:** a sidebar of generators, options on the left, results as a numbered list. Line icons instead of emoji, one accent colour, very little motion.
@@ -142,7 +145,7 @@ Requires Node.js 22.12 or later.
 ```bash
 npm install
 npm run dev       # http://localhost:5173
-npm test          # 130 unit tests
+npm test          # 133 unit tests
 npm run test:e2e  # 7 browser tests, incl. accessibility (first run: npx playwright install chromium)
 npm run lint      # Biome
 npm run build     # production build in dist/
@@ -154,7 +157,7 @@ npm run build     # production build in dist/
 
 ## Testing
 
-- **130 unit tests** (Vitest), including:
+- **133 unit tests** (Vitest), including:
   - chi-square uniformity tests for both random sources
   - a modulo-bias regression test
   - the Markov model never returning a training word

@@ -9,7 +9,7 @@ import {
 import { ADJECTIVES, MYTHIC_WORDS, NOUNS, TEAM_SIZE_WORDS, TEAM_THEMES } from "../data/words.ts";
 import { passwordGenerator, type PasswordOptions } from "./password.ts";
 import { personNameGenerator } from "./person-name.ts";
-import { blend, projectNameGenerator } from "./project-name.ts";
+import { blend, hindiMeanings, projectNameGenerator } from "./project-name.ts";
 import { teamNameGenerator } from "./team-name.ts";
 import { PLATFORMS, usernameGenerator } from "./username.ts";
 
@@ -54,12 +54,12 @@ describe("password", () => {
 
   it("reports entropy and a strength meter", () => {
     // 26 + 26 + 10 + 13 symbols = 75 characters; 16 × log2(75) ≈ 99.7 bits.
-    const strong = passwordGenerator.describe!("", base);
+    const strong = passwordGenerator.describe!("", base)!;
     expect(strong.text).toBe("Very strong · ~100 bits of entropy");
     expect(strong.tone).toBe(3);
     expect(strong.meter).toBeCloseTo(99.66 / 128, 2);
 
-    const weak = passwordGenerator.describe!("", { ...base, length: 6, upper: false, symbols: false, numbers: false });
+    const weak = passwordGenerator.describe!("", { ...base, length: 6, upper: false, symbols: false, numbers: false })!;
     expect(weak.text).toMatch(/^Weak/);
     expect(weak.tone).toBe(0);
   });
@@ -158,6 +158,33 @@ describe("project name", () => {
     const rng = seededRng("kebab");
     const opts = { ...projectNameGenerator.defaults, caseStyle: "kebab" };
     for (const n of many(300, () => projectNameGenerator.generate(opts, rng))) expect(n).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+  });
+
+  it("makes Hinglish names from one Hindi and one English word, and explains the Hindi one", () => {
+    const rng = seededRng("hinglish");
+    const opts = { keywords: "", technique: "hinglish", caseStyle: "pascal" };
+    for (const n of many(200, () => projectNameGenerator.generate(opts, rng))) {
+      const meanings = hindiMeanings(n);
+      expect(meanings.length).toBeGreaterThanOrEqual(1);
+      expect(projectNameGenerator.describe!(n, opts)?.text).toMatch(/= .+ \(Hindi\)/);
+    }
+  });
+
+  it("builds Hinglish names around the user's keyword, in Title Case", () => {
+    const rng = seededRng("hinglish-kw");
+    const opts = { keywords: "form", technique: "hinglish", caseStyle: "title" };
+    const names = many(200, () => projectNameGenerator.generate(opts, rng));
+    expect(names.filter(n => n.split(" ").includes("Form")).length).toBeGreaterThan(70); // about half use the keyword
+    expect(names.every(n => /^[A-Z][a-z]+ [A-Z][a-z]+$/.test(n))).toBe(true); // e.g. "Form Saathi"
+  });
+
+  it("explains Hindi words in every case style, but not inside unrelated English words", () => {
+    expect(hindiMeanings("FormSaathi")).toEqual([["saathi", "companion"]]);
+    expect(hindiMeanings("form-saathi")).toEqual([["saathi", "companion"]]);
+    expect(hindiMeanings("Form Saathi")).toEqual([["saathi", "companion"]]);
+    expect(hindiMeanings("dukaanpay")).toEqual([["dukaan", "shop"]]);
+    expect(hindiMeanings("CodeForge")).toEqual([]);
+    expect(projectNameGenerator.describe!("CodeForge", projectNameGenerator.defaults)).toBeNull();
   });
 
   it("uses the user's keywords often", () => {

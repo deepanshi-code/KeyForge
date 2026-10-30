@@ -68,8 +68,8 @@ export interface Generator<O extends Options = Options> {
    */
   validate?(opts: O): string | null;
   generate(opts: O, rng: Rng): string;
-  /** Optional note shown under each result, e.g. strength. */
-  describe?(value: string, opts: O): ResultNote;
+  /** Optional note shown under each result, e.g. strength. null = nothing to say for this one. */
+  describe?(value: string, opts: O): ResultNote | null;
 }
 
 /** Thrown when valid options still can't produce a result (e.g. too-short max length). */

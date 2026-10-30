@@ -21,7 +21,7 @@ export function capitalize(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
-export type CaseStyle = "pascal" | "lower" | "kebab";
+export type CaseStyle = "pascal" | "lower" | "kebab" | "title";
 
 export function joinWords(words: string[], style: CaseStyle): string {
   switch (style) {
@@ -31,6 +31,8 @@ export function joinWords(words: string[], style: CaseStyle): string {
       return words.join("");
     case "kebab":
       return words.join("-");
+    case "title":
+      return words.map(capitalize).join(" ");
   }
 }
 

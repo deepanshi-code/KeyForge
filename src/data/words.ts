@@ -199,3 +199,36 @@ export const TEAM_SIZE_WORDS: Record<number, { group: string[]; of: string[]; nu
   11: { group: ["eleven"], of: [], number: "eleven", prefix: "hendeca", roman: "XI" },
   12: { group: ["dozen", "twelve"], of: [], number: "twelve", prefix: "dodeca", roman: "XII" },
 };
+
+/**
+ * Common Hindi words in Roman script, with plain English meanings, for
+ * Hinglish names like "FormSaathi". Hand-picked: well known, positive, and
+ * easy to spell. Words that hide inside common English words ("chai" in
+ * "chain", "desi" in "design") are left out so meanings aren't shown wrongly.
+ */
+export const HINDI_WORDS: Readonly<Record<string, string>> = {
+  saathi: "companion", dost: "friend", mitra: "friend", yatra: "journey", safar: "journey",
+  raah: "path", disha: "direction", manzil: "destination", udaan: "flight", sapna: "dream",
+  kaam: "work", seva: "service", sahayak: "helper", sutra: "formula", gyaan: "knowledge",
+  vidya: "learning", shiksha: "education", pustak: "book", kosh: "treasury", nidhi: "treasure",
+  dhan: "wealth", bachat: "savings", hisaab: "accounts", khata: "ledger", vyapar: "trade",
+  bazaar: "market", dukaan: "shop", mandi: "market", ghar: "home", parivar: "family",
+  rasoi: "kitchen", arogya: "health", sangam: "confluence", manch: "platform", tarang: "wave",
+  roshni: "light", jyoti: "flame", shakti: "strength", jugaad: "clever fix", suchna: "information",
+  sanchar: "communication", naya: "new", asaan: "easy", pakka: "for sure", apna: "our own",
+  kisan: "farmer", shaadi: "wedding", khel: "game", sangeet: "music", kala: "art",
+};
+
+/** Hindi describing words: they go first, like "Apna Shop", "Asaan Form". */
+export const HINDI_ADJECTIVES = ["naya", "asaan", "pakka", "apna"] as const;
+
+/** English things a product is about: "Form Saathi", "Study Dost", "Apna Shop". */
+export const HINGLISH_THINGS = unique([
+  "form", "book", "study", "task", "note", "track", "ride", "shop", "chat", "fit",
+  "cook", "home", "care", "desk", "cart", "exam", "job", "trip", "money", "health",
+]);
+
+/** English product endings that follow a Hindi word: "Dukaan Pay", "Yatra Hub". */
+export const HINGLISH_ENDINGS = unique([
+  "hub", "box", "pro", "pay", "go", "kit", "plus", "lab", "zone", "point", "link", "app", "cloud", "flow",
+]);

@@ -2,7 +2,10 @@ import type { Rng } from "../core/rng.ts";
 import { isClean, joinWords, parseKeywords, stem, type CaseStyle } from "../core/text.ts";
 import { GenerationError, type Generator } from "../core/types.ts";
 import { inventWord } from "../core/uniqueness.ts";
-import { CLASSIC_ROOTS, PROJECT_PREFIXES, PROJECT_SUFFIXES, TECH_WORDS } from "../data/words.ts";
+import {
+  CLASSIC_ROOTS, HINDI_ADJECTIVES, HINDI_WORDS, HINGLISH_ENDINGS, HINGLISH_THINGS, PROJECT_PREFIXES,
+  PROJECT_SUFFIXES, TECH_WORDS,
+} from "../data/words.ts";
 
 export type ProjectNameOptions = {
   keywords: string;
@@ -11,7 +14,9 @@ export type ProjectNameOptions = {
 };
 
 /** "Surprise me" picks from these; "invented" is listed twice so mixes lean unique. */
-const MIX = ["compound", "blend", "affix", "classic", "invented", "invented"] as const;
+const MIX = ["compound", "blend", "affix", "classic", "hinglish", "invented", "invented"] as const;
+const HINDI = Object.keys(HINDI_WORDS);
+const HINDI_NOUNS = HINDI.filter(w => !(HINDI_ADJECTIVES as readonly string[]).includes(w));
 const BRAND_ENDINGS = ["ora", "ix", "io", "ium", "era", "yx", "ana", "eon", "ly", "iva"];
 const MIN_LENGTH = 4;
 const MAX_LENGTH = 18;
@@ -56,6 +61,14 @@ function buildParts(technique: string, keywords: string[], rng: Rng): string[] |
       return rng.chance(0.5) ? [rng.pick(PROJECT_PREFIXES), base()] : [base() + rng.pick(PROJECT_SUFFIXES)];
     case "classic":
       return rng.chance(0.5) ? [rng.pick(CLASSIC_ROOTS), base()] : [rng.pick(CLASSIC_ROOTS) + rng.pick(PROJECT_SUFFIXES)];
+    case "hinglish": {
+      // One Hindi + one English word, in the orders real Hinglish brands use.
+      const thing = keywords.length > 0 && rng.chance(0.7) ? rng.pick(keywords) : rng.pick(HINGLISH_THINGS);
+      const roll = rng.int(10);
+      if (roll < 5) return [thing, rng.pick(HINDI_NOUNS)];          // "Form Saathi", "Study Dost"
+      if (roll < 8) return [rng.pick(HINDI_NOUNS), rng.pick(HINGLISH_ENDINGS)]; // "Dukaan Pay", "Yatra Hub"
+      return [rng.pick(HINDI_ADJECTIVES), thing];                    // "Apna Shop", "Asaan Form"
+    }
     case "invented": {
       // A keyword reshaped into a brand ("notes" → "Notora"), or a brand-new word ("Vespyra").
       if (keywords.length > 0 && rng.chance(0.5)) return [stem(rng.pick(keywords), 5) + rng.pick(BRAND_ENDINGS)];
@@ -87,8 +100,9 @@ export const projectNameGenerator: Generator<ProjectNameOptions> = {
         { value: "compound", label: "Two words joined — CodeForge" },
         { value: "affix", label: "Prefix / suffix — Noteify, OmniNote" },
         { value: "classic", label: "Latin & Greek roots — LumenStack" },
+        { value: "hinglish", label: "Hinglish — Form Saathi" },
       ],
-      help: "Different ways of building a name. Not sure? Keep “Surprise me”.",
+      help: "Different ways of building a name. Hinglish mixes a Hindi and an English word. Not sure? Keep “Surprise me”.",
     },
     {
       kind: "select", key: "caseStyle", label: "Case",
@@ -96,6 +110,7 @@ export const projectNameGenerator: Generator<ProjectNameOptions> = {
         { value: "pascal", label: "PascalCase" },
         { value: "lower", label: "lowercase" },
         { value: "kebab", label: "kebab-case" },
+        { value: "title", label: "Title Case" },
       ],
     },
   ],
@@ -114,4 +129,28 @@ export const projectNameGenerator: Generator<ProjectNameOptions> = {
     }
     throw new GenerationError("Couldn't build a name from those keywords. Try shorter keywords.");
   },
+
+  /** Hinglish names say what their Hindi word means: "saathi = companion". */
+  describe(value) {
+    const meanings = hindiMeanings(value);
+    return meanings.length > 0 ? { text: meanings.map(([w, m]) => `${w} = ${m} (Hindi)`).join(" · ") } : null;
+  },
 };
+
+/**
+ * Finds Hindi words in a generated name, in any case style. Names are split at
+ * spaces, hyphens and capitals ("FormSaathi" → form, saathi); an all-lowercase
+ * name is checked for a Hindi word at its start or end.
+ */
+export function hindiMeanings(value: string): [string, string][] {
+  const parts = value.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().split(/[\s-]+/).filter(Boolean);
+  const found = new Set(parts.filter(p => p in HINDI_WORDS));
+  if (found.size === 0 && parts.length === 1) {
+    const [word] = parts;
+    for (const hindi of HINDI) {
+      const rest = word.length - hindi.length;
+      if (rest >= 2 && (word.startsWith(hindi) || word.endsWith(hindi))) found.add(hindi);
+    }
+  }
+  return [...found].map(w => [w, HINDI_WORDS[w]]);
+}

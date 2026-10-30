@@ -26,7 +26,7 @@ const NPM_NAME = /^[a-z0-9][a-z0-9._-]{0,213}$/;
 
 /** What a name looks like on each service: GitHub and npm are lowercase; domains drop separators. */
 export function forService(value: string) {
-  const lower = value.toLowerCase();
+  const lower = value.toLowerCase().trim().replace(/\s+/g, "-"); // "Form Saathi" → "form-saathi"
   return {
     github: lower,
     npm: lower,

@@ -3,6 +3,9 @@ import { canCheck, checksFor, type CheckResult } from "./core/availability.ts";
 import { generateBatch } from "./core/batch.ts";
 import { personaColumns, toCsv } from "./core/csv.ts";
 import { createHistoryBuffer } from "./core/history-buffer.ts";
+import { trainRanker } from "./core/rank.ts";
+import { decodeShortlist, type SharedItem } from "./core/share.ts";
+import { createSkips } from "./core/skips.ts";
 import { browserStore, createLibrary } from "./core/library.ts";
 import { findGenerator, GENERATORS } from "./core/registry.ts";
 import { secureRng } from "./core/rng.ts";
@@ -39,10 +42,26 @@ const drawer = setupLibraryDrawer(library, stats, () => {
   updateTasteStatus();
 });
 const batchStars = createBatchStars(stats);
+const skips = createSkips(savedStore);
+/** Skips needed before the ranker that also learns from them takes over from the stars-only model. */
+const MIN_SKIPS = 10;
+/** The last batch that stayed on screen long enough to be seen; its unstarred names become skips. */
+let lastSeen: { generatorId: string; values: string[] } | null = null;
 const historyBuffer = createHistoryBuffer((generatorId, values) => {
   library.addToHistory(generatorId, values); // ignored for sensitive generators
+  lastSeen = { generatorId, values };
   drawer.render();
 });
+
+/** Records the seen batch's unstarred names as skips, once it's replaced. */
+function recordSkips(): void {
+  if (!lastSeen) return;
+  const gen = findGenerator(lastSeen.generatorId);
+  if (gen && !gen.sensitive) {
+    skips.add(gen.id, lastSeen.values.filter(v => !library.isFavourite(gen.id, v)));
+  }
+  lastSeen = null;
+}
 // Don't lose the batch on screen if the tab closes before it settles.
 window.addEventListener("pagehide", () => historyBuffer.commit());
 // Saving is encrypted (async), so also commit when the tab is hidden, which leaves time to finish.
@@ -105,7 +124,10 @@ function updateTasteStatus(): void {
       ),
     );
   } else {
-    tasteStatus.textContent = `Ranked by similarity to your ${n} favourites, with a few random picks mixed in so you still see new styles.`;
+    const skipped = skips.list(current.id).length;
+    tasteStatus.textContent = skipped >= MIN_SKIPS
+      ? `Learning from your ${n} stars and ${skipped} names you skipped, with a few random picks mixed in so you still see new styles.`
+      : `Ranked by similarity to your ${n} favourites, with a few random picks mixed in so you still see new styles.`;
   }
 }
 
@@ -142,6 +164,50 @@ function selectGenerator(id: string): void {
 window.addEventListener("hashchange", () => {
   const id = location.hash.slice(1);
   if (findGenerator(id)) selectGenerator(id);
+  else openSharedShortlist();
+});
+
+// ---- Shared shortlists (#share=… links) ----
+
+const shareDialog = byId<HTMLDialogElement>("shareDialog");
+let shared: SharedItem[] = [];
+
+/** Shows the names in a shared link, if the page was opened with one. Returns whether it did. */
+function openSharedShortlist(): boolean {
+  const items = decodeShortlist(location.hash, id => !(findGenerator(id)?.sensitive ?? true));
+  if (!items) return false;
+  // Drop the names from the address bar, so a reload or bookmark doesn't reopen them.
+  history.replaceState(null, "", `${location.pathname}#${current.id}`);
+  if (items.length === 0) {
+    toast("That shared link has no names in it", "error");
+    return true;
+  }
+  shared = items;
+  byId("shareList").replaceChildren(...items.map(item => {
+    const button = h("button", { type: "button", class: "lib-copy" },
+      h("span", { class: "lib-value" }, item.value),
+      h("span", { class: "lib-meta" }, findGenerator(item.generatorId)?.name ?? item.generatorId));
+    button.addEventListener("click", async () => {
+      toast((await copyText(item.value)) ? `Copied “${item.value}”` : "Couldn't copy", "info");
+    });
+    return h("li", { class: "lib-item" }, button);
+  }));
+  if (!shareDialog.open) shareDialog.showModal();
+  return true;
+}
+
+byId("shareClose").append(icon("x"));
+byId("shareClose").addEventListener("click", () => shareDialog.close());
+byId("shareSave").addEventListener("click", () => {
+  let added = 0;
+  for (const item of shared) {
+    if (!library.isFavourite(item.generatorId, item.value) && library.toggleFavourite(item.generatorId, item.value)) added++;
+  }
+  shareDialog.close();
+  toast(session ? `Saved ${added} name${added === 1 ? "" : "s"} to your favourites` : `Saved ${added} for this visit. Sign in to keep them.`);
+  drawer.render();
+  refreshStars();
+  updateTasteStatus();
 });
 
 // ---- Generating ----
@@ -159,11 +225,15 @@ function pickResults(opts: Options, count: number): { picked: RankedResult[]; sh
   // Leave out names already starred, so learning surfaces new ones.
   const known = new Set(favourites);
   const pool = generateBatch(current, opts, count * POOL_FACTOR, secureRng).values.filter(v => !known.has(v));
-  const picked = rankByTaste(pool, trainTaste(favourites), count, secureRng);
+  // With enough skips, learn from both "yes" (stars) and "no" (skips); otherwise from stars alone.
+  const skipped = skips.list(current.id).filter(v => !known.has(v));
+  const model = skipped.length >= MIN_SKIPS ? trainRanker(favourites, skipped) : trainTaste(favourites);
+  const picked = rankByTaste(pool, model, count, secureRng);
   return { picked, shortBy: count - picked.length, learning: true };
 }
 
 function generate(): void {
+  recordSkips(); // the batch being replaced: seen but not starred
   const opts = readOptions();
   sessionOptions.set(current.id, opts);
   const count = Number(countInput.value);
@@ -491,6 +561,9 @@ setupThemeToggle(byId<HTMLButtonElement>("themeBtn"));
 renderAccount();
 selectGenerator(location.hash.slice(1));
 drawer.render();
-// Opening the app shows the sign-in screen when there's something to unlock (or old items to move in).
-if (profiles.list().length > 0) auth.show("signin");
-else if (profiles.legacyItemCount() > 0) auth.show("create");
+// A shared link opens its shortlist first. Otherwise, opening the app shows the
+// sign-in screen when there's something to unlock (or old items to move in).
+if (!openSharedShortlist()) {
+  if (profiles.list().length > 0) auth.show("signin");
+  else if (profiles.legacyItemCount() > 0) auth.show("create");
+}

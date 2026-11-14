@@ -1,5 +1,6 @@
 import type { Rng } from "../core/rng.ts";
 import { isClean, joinWords, parseKeywords, stem, type CaseStyle } from "../core/text.ts";
+import { hindiNote } from "../core/hindi.ts";
 import { GenerationError, type Generator } from "../core/types.ts";
 import { inventWord } from "../core/uniqueness.ts";
 import {
@@ -131,26 +132,5 @@ export const projectNameGenerator: Generator<ProjectNameOptions> = {
   },
 
   /** Hinglish names say what their Hindi word means: "saathi = companion". */
-  describe(value) {
-    const meanings = hindiMeanings(value);
-    return meanings.length > 0 ? { text: meanings.map(([w, m]) => `${w} = ${m} (Hindi)`).join(" · ") } : null;
-  },
+  describe: value => hindiNote(value),
 };
-
-/**
- * Finds Hindi words in a generated name, in any case style. Names are split at
- * spaces, hyphens and capitals ("FormSaathi" → form, saathi); an all-lowercase
- * name is checked for a Hindi word at its start or end.
- */
-export function hindiMeanings(value: string): [string, string][] {
-  const parts = value.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().split(/[\s-]+/).filter(Boolean);
-  const found = new Set(parts.filter(p => p in HINDI_WORDS));
-  if (found.size === 0 && parts.length === 1) {
-    const [word] = parts;
-    for (const hindi of HINDI) {
-      const rest = word.length - hindi.length;
-      if (rest >= 2 && (word.startsWith(hindi) || word.endsWith(hindi))) found.add(hindi);
-    }
-  }
-  return [...found].map(w => [w, HINDI_WORDS[w]]);
-}

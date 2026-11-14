@@ -14,7 +14,7 @@ One private platform for naming your online identity and projects: **unique user
 
 | Generator | Highlights |
 |---|---|
-| 👤 **Username** | Professional / gamer / minimal / cute styles. Built around your name (`builtbydeepa`, `deepyx`) and interests. **Platform presets** follow the real rules of Instagram, X, GitHub and Discord (length, allowed characters, no `..` or edge hyphens). |
+| 👤 **Username** | Professional / gamer / minimal / cute / **Hinglish** (*deepa_saathi*, *yatra_vibes*) styles. Built around your name (`builtbydeepa`, `deepyx`) and interests. **Platform presets** follow the real rules of Instagram, X, GitHub and Discord (length, allowed characters, no `..` or edge hyphens). |
 | 🚀 **Project name** | From your keywords, with six naming techniques (below), including **Hinglish** names like *Form Saathi*. PascalCase / lowercase / kebab-case / Title Case. |
 | 🏆 **Team name** | Six themes (tech, esports, sports, space, mythology, general). The **team member count** shapes the name: *Quantum Quartet*, *Trio of Titans*, *The Five Phoenixes*, *Krakens VII*. Alliteration. |
 | 🎭 **Persona** | Combines the other generators into one fake identity: `Thea Ashford · @hellothea · thea.ashford@example.com`. Uses `example.com` (reserved for testing, RFC 2606), so emails can never reach a real person. **Download 100 as CSV** (name, username, email) for test data. |
@@ -24,7 +24,9 @@ One private platform for naming your online identity and projects: **unique user
 ### ✨ Learns your taste (on-device)
 Star 3 or more names and the app starts learning what you like:
 1. It generates **6× more candidates** than you asked for.
-2. A small **character-trigram model trained only on your favourites** scores each candidate by how much it "sounds like" them, with a nudge towards similar lengths.
+2. It scores each candidate with a model of your taste:
+   - **From your stars:** a character-trigram model of how your favourites "sound", with a nudge towards similar lengths.
+   - **From stars *and* skips (learning-to-rank):** once you've passed over 10+ names, a **logistic-regression ranker** takes over. Names that stayed on screen but weren't starred count as "no". It learns from length, separators (`_` vs `.`), vowels, rare letters, Hindi words and hashed letter patterns. In simulated users with a hidden preference it reaches held-out **AUC > 0.8**, and beats the stars-only model when the preference is about what to avoid (`src/core/rank.test.ts`).
 3. **75%** of results are the best matches. **25%** are drawn at random from the same candidates, so you still see new styles and don't get stuck in a bubble. The two are shuffled together.
 4. **"Why this?"** Each result says which favourites it resembles (*Similar to sapphire_comet, sable_tanuki*), using shared letter-triples (Jaccard similarity).
 
@@ -84,6 +86,19 @@ The Hindi words are a hand-picked list of 50 common, positive words with plain m
 - **Installable and offline (PWA):** install it from the browser menu on phone or desktop. A service worker keeps a copy, so it works with no internet.
 - Works on phones, supports keyboard and screen readers, and turns animations off if your system asks for reduced motion.
 
+### 🔗 Share a shortlist
+*Saved → Favourites → Share* copies a link with up to 30 of your names packed after the `#`. Browsers never send that part to a server, so sharing needs no backend. Whoever opens it sees the names and can save them, but nothing is saved automatically. Passwords are never included, and incoming links are validated and capped.
+
+## 🧪 ML experiment: neural vs n-gram name models
+
+Can a neural network invent better names than the classic Markov approach? [`ml/RESULTS.md`](ml/RESULTS.md) answers this with a reproducible experiment (`npm run ml`):
+
+- **Models:** a smoothed, tuned **n-gram baseline** vs an **MLP language model written from scratch** (letter embeddings → tanh layer → softmax). Backpropagation is hand-written and verified by a **gradient check**.
+- **Protocol:** one seeded 80/10/10 split of all ~1,000 words; settings tuned on validation only; the test set used once; a **paired bootstrap** 95% interval for the difference.
+- **Result:** on held-out words the two **tie** (perplexity 12.4 vs 12.8; the interval includes 0). But the neural model generates far more usable names: **69.7% valid vs 43.8%** (p < 0.0001), and more distinct ones. Bigger networks overfit (validation gap up to 11.5 points), so **more data, not a bigger model,** is the next step.
+
+The app still uses the Markov model for invented words: it's tiny, instant, and ties on prediction. The experiment, report and trained weights live in `ml/`.
+
 ## How invented words work (Markov chain)
 
 `src/core/markov.ts` learns which letter tends to follow each **pair** of letters in a list of training words (myths, stars, gems, birds…). From "nova" it learns `^^→n`, `^n→o`, `no→v`, `ov→a`, `va→end`.
@@ -127,12 +142,14 @@ Other design decisions:
 
 ```
 src/
-├── core/          interfaces, RNG, Markov model, taste model, stats, uniqueness, validation, batching, entropy, storage
+├── core/          interfaces, RNG, Markov model, taste model, learning-to-rank, stats, profiles (vault), sharing, storage
+├── ml/            character language models (n-gram and neural MLP) + gradient check
 ├── generators/    one file per generator + tests
 ├── data/          word lists, names, Markov training words, blocklist
 ├── ui/            form builder, icons, theme toggle, drawer, toasts
 ├── styles/        main.css (light and dark themes are CSS custom properties)
 └── main.ts        wires the UI together
+ml/                experiment script, RESULTS.md, trained weights
 e2e/               browser tests (Playwright) and accessibility scans (axe)
 docs/              user-study kit
 public/            app manifest, icons, service worker (offline support)
@@ -145,9 +162,11 @@ Requires Node.js 22.12 or later.
 ```bash
 npm install
 npm run dev       # http://localhost:5173
-npm test          # 133 unit tests
-npm run test:e2e  # 7 browser tests, incl. accessibility (first run: npx playwright install chromium)
+npm test          # 156 unit tests
+npm run test:e2e  # 8 browser tests, incl. accessibility (first run: npx playwright install chromium)
 npm run lint      # Biome
+npm run ml        # re-run the neural vs n-gram experiment (~3 min)
+npm run test:mutation  # mutation testing (Stryker), slow
 npm run build     # production build in dist/
 ```
 
@@ -157,7 +176,7 @@ npm run build     # production build in dist/
 
 ## Testing
 
-- **133 unit tests** (Vitest), including:
+- **156 unit tests** (Vitest), including:
   - chi-square uniformity tests for both random sources
   - a modulo-bias regression test
   - the Markov model never returning a training word
@@ -166,12 +185,15 @@ npm run build     # production build in dist/
   - platform rules for every platform × separator combination
   - encryption at rest, wrong passwords, separate profiles, backup and restore
   - CSV escaping and formula neutralising; availability checks never reporting "free" on errors
+  - the neural model's **gradient check**, training and save/load; probability distributions summing to 1
+  - learning-to-rank on simulated users (held-out AUC); share links (round-trip, caps, never passwords, corrupted links)
   - team names always reflecting the member count (2–12)
   - every theme, size and uniqueness combination
   - storage and import/export
 - **Contract tests** run every registered generator through the same checks: valid defaults, every option value works, out-of-range numbers are rejected, and output is clean.
-- **7 browser tests** (Playwright, on the production build): generate and regenerate with R; GitHub preset output; passwords never saved or exported; create profile → star → reload (locked) → wrong password refused → right password restores the favourite.
+- **8 browser tests** (Playwright, on the production build): generate and regenerate with R; GitHub preset output; passwords never saved or exported; create profile → star → reload (locked) → wrong password refused → right password restores the favourite; a shared link shows its names and saves them only on request.
 - **Accessibility:** axe scans the main screen in light and dark mode and the sign-in dialog, and fails on any serious issue. Its first run found low-contrast small text and buttons whose spoken names didn't match their visible text; both were fixed.
+- **Mutation testing** (Stryker, `npm run test:mutation`) checks the tests themselves: it plants ~1,000 small bugs in the core modules and counts how many the tests catch. **Score: 70%** overall. Strongest: history buffering 90%, random numbers 83%, statistics 81%. Weakest: availability checks, share links and ranker features (63–66%), which are the next places to add tests. It's too slow for every push, so it runs on demand.
 - **CI:** lint, typecheck, unit tests, browser tests and build must all pass before anything is deployed.
 
 ## Deploy (free, automatic)
@@ -186,11 +208,11 @@ Open it on your phone and choose **Install / Add to Home screen** to use it like
 
 - **Generated names may already be taken.** Uniqueness is guaranteed within a batch; the optional Check covers GitHub, npm and .com only.
 - **Some invented words are odd**, because the Markov model is small and character-based.
-- **The name lists are hand-written.** v2: a larger, licensed dataset.
-- **Taste learning only uses stars.** It doesn't learn from names you skip, and it needs a few favourites before it helps.
+- **The name lists are hand-written** (~1,000 words), which is also what limits the neural model. v2: a larger, clearly licensed dataset, then re-run `npm run ml`.
+- **Taste learning needs a little data:** 3 stars to start, and 10 skips before the ranker that learns from both takes over.
 - **Insights measures one person at a time.** It's a fair within-person test, but "taste learning helps people" needs a study across users: see the ready-to-run kit in [`docs/user-study.md`](docs/user-study.md). **Results: not run yet.**
 
 **v2 ideas:**
 - Run the user study and publish the results here
 - Hindi interface
-- Learn from skipped names too, not just stars
+- Compare the stars-only and stars-and-skips rankers live, with the same blind interleaving

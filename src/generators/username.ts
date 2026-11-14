@@ -1,9 +1,11 @@
 import type { Rng } from "../core/rng.ts";
+import { hindiNote } from "../core/hindi.ts";
 import { cleanWord, isClean, stem } from "../core/text.ts";
 import { GenerationError, type Generator } from "../core/types.ts";
 import { inventWord, pickFitting, UNIQUENESS_FIELD, type Uniqueness } from "../core/uniqueness.ts";
 import {
   ADJECTIVES, CUTE_ADJECTIVES, CUTE_ENDINGS, CUTE_NOUNS, GAMER_ENDINGS, GAMER_NOUNS, GAMER_PREFIXES,
+  HINDI_ADJECTIVES, HINDI_WORDS, HINGLISH_HANDLE_ENDINGS,
   NAME_MORPH_ENDINGS, NAME_PREFIXES, NAME_SUFFIXES, NOUNS, PRO_SUFFIXES, RARE_ADJECTIVES,
   RARE_GAMER_PREFIXES, RARE_NOUNS,
 } from "../data/words.ts";
@@ -133,6 +135,15 @@ function buildParts(
       return pair(fixed(rng.chance(0.5) ? name.charAt(0) : name.slice(0, 4)), orInterest(word));
     }
 
+    case "hinglish": {
+      // A Hindi word with your name, interest or an English ending: "deepa_saathi", "yatra_vibes".
+      const hindi = list(Object.keys(HINDI_WORDS).filter(w => !HINDI_ADJECTIVES.includes(w as never)));
+      const ending = list(HINGLISH_HANDLE_ENDINGS);
+      if (name) return rng.chance(0.6) ? pair(fixed(name), hindi) : pair(hindi, fixed(name));
+      if (interest && rng.chance(0.6)) return pair(fixed(interest), hindi);
+      return rng.chance(0.75) ? pair(hindi, ending) : pair(list(HINDI_ADJECTIVES), ending); // "apna_vibes"
+    }
+
     default:
       throw new GenerationError(`Unknown style "${opts.style}".`);
   }
@@ -152,6 +163,7 @@ export const usernameGenerator: Generator<UsernameOptions> = {
         { value: "gamer", label: "Gamer" },
         { value: "minimal", label: "Minimal" },
         { value: "cute", label: "Cute" },
+        { value: "hinglish", label: "Hinglish" },
       ],
     },
     {
@@ -184,6 +196,9 @@ export const usernameGenerator: Generator<UsernameOptions> = {
     style: "professional", platform: "any", uniqueness: "rare", name: "", interest: "",
     separator: "underscore", numbers: false, maxLength: 18,
   },
+
+  /** Hinglish handles say what their Hindi word means. */
+  describe: value => hindiNote(value),
 
   generate(opts, rng) {
     const platform = PLATFORMS[opts.platform] ?? PLATFORMS.any;

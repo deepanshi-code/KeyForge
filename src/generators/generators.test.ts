@@ -9,7 +9,8 @@ import {
 import { ADJECTIVES, MYTHIC_WORDS, NOUNS, TEAM_SIZE_WORDS, TEAM_THEMES } from "../data/words.ts";
 import { passwordGenerator, type PasswordOptions } from "./password.ts";
 import { personNameGenerator } from "./person-name.ts";
-import { blend, hindiMeanings, projectNameGenerator } from "./project-name.ts";
+import { hindiMeanings } from "../core/hindi.ts";
+import { blend, projectNameGenerator } from "./project-name.ts";
 import { teamNameGenerator } from "./team-name.ts";
 import { PLATFORMS, usernameGenerator } from "./username.ts";
 
@@ -93,6 +94,20 @@ describe("username", () => {
         }
       }
     }
+  });
+
+  it("makes Hinglish handles and explains the Hindi word", () => {
+    const rng = seededRng("hinglish-user");
+    for (const u of many(150, () => usernameGenerator.generate({ ...base, style: "hinglish" }, rng))) {
+      expect(hindiMeanings(u).length).toBeGreaterThanOrEqual(1);
+      expect(usernameGenerator.describe!(u, base)?.text).toMatch(/\(Hindi\)/);
+    }
+  });
+
+  it("builds Hinglish handles around the user's name", () => {
+    const rng = seededRng("hinglish-name");
+    const names = many(100, () => usernameGenerator.generate({ ...base, style: "hinglish", name: "Deepa", maxLength: 30 }, rng));
+    expect(names.every(u => u.includes("deepa"))).toBe(true);
   });
 
   it("uses a hyphen on GitHub instead of an underscore", () => {

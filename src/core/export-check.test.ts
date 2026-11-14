@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { checkDotCom, checkGitHub, checkNpm, checksFor, forService } from "./availability.ts";
 import { personaColumns, toCsv } from "./csv.ts";
+import { decodeShortlist, encodeShortlist, SHARE_LIMIT } from "./share.ts";
 
 describe("CSV export", () => {
   it("quotes values that contain commas, quotes or line breaks", () => {
@@ -60,5 +61,30 @@ describe("availability checks", () => {
     expect(checksFor("username", "vesper_flux", fakeFetch({}))).toHaveLength(1);
     expect(checksFor("project-name", "Cloudata", fakeFetch({}))).toHaveLength(3);
     expect(checksFor("password", "x", fakeFetch({}))).toBeNull();
+  });
+});
+
+describe("shareable shortlists", () => {
+  const allowAll = () => true;
+
+  it("round-trips names through a link, including non-English text", () => {
+    const items = [{ generatorId: "username", value: "vesper_flux" }, { generatorId: "team-name", value: "Byte Brigade" }, { generatorId: "project-name", value: "Form Saathi ✓" }];
+    expect(decodeShortlist(`#${encodeShortlist(items)}`, allowAll)).toEqual(items);
+  });
+
+  it("only keeps generators that may be shared (never passwords)", () => {
+    const link = encodeShortlist([{ generatorId: "password", value: "hunter2" }, { generatorId: "username", value: "ok" }]);
+    expect(decodeShortlist(link, id => id !== "password")).toEqual([{ generatorId: "username", value: "ok" }]);
+  });
+
+  it(`caps a link at ${SHARE_LIMIT} names`, () => {
+    const many = Array.from({ length: 50 }, (_, i) => ({ generatorId: "username", value: `n${i}` }));
+    expect(decodeShortlist(encodeShortlist(many), allowAll)).toHaveLength(SHARE_LIMIT);
+  });
+
+  it("ignores links that aren't shortlists, or are corrupted", () => {
+    expect(decodeShortlist("#username", allowAll)).toBeNull();
+    expect(decodeShortlist("#share=%%%not-base64", allowAll)).toBeNull();
+    expect(decodeShortlist(`#share=${btoa('{"v":1,"i":[[1,2],"x",["username",""]]}')}`, allowAll)).toEqual([]);
   });
 });

@@ -10,3 +10,5 @@ desktop.ini
 .idea/
 test-results/
 playwright-report/
+.stryker-tmp/
+reports/

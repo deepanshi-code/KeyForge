@@ -86,3 +86,18 @@ test.describe("accessibility (axe)", () => {
     expect(await serious(page)).toEqual([]);
   });
 });
+
+test("a shared shortlist link shows its names and saves them only on request", async ({ page }) => {
+  const payload = Buffer.from(JSON.stringify({ v: 1, i: [["username", "vesper_flux"], ["project-name", "Form Saathi"], ["password", "hunter2"]] }))
+    .toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  await page.goto(`./#share=${payload}`);
+  const dialog = page.locator("#shareDialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("vesper_flux");
+  await expect(dialog).toContainText("Form Saathi");
+  await expect(dialog).not.toContainText("hunter2"); // passwords are never shared
+  await expect(page).not.toHaveURL(/share=/); // removed from the address bar
+  await expect(page.locator("#savedCount")).toBeHidden(); // nothing saved yet
+  await page.locator("#shareSave").click();
+  await expect(page.locator("#savedCount")).toHaveText("2");
+});

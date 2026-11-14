@@ -1,5 +1,6 @@
 import type { Library } from "../core/library.ts";
 import { findGenerator } from "../core/registry.ts";
+import { encodeShortlist, SHARE_LIMIT } from "../core/share.ts";
 import { twoProportionPValue, wilsonInterval, type Stats } from "../core/stats.ts";
 import { byId, copyText, h } from "./dom.ts";
 import { icon } from "./icons.ts";
@@ -88,6 +89,7 @@ export function setupLibraryDrawer(library: Library, stats: Stats, onChange: () 
     badge.hidden = favourites.length === 0;
     for (const t of tabs) t.setAttribute("aria-pressed", String(t.dataset.tab === tab));
     byId("exportBtn").hidden = tab === "insights";
+    byId("shareBtn").hidden = tab !== "favourites" || favourites.length === 0;
     byId("importBtn").hidden = tab === "insights";
 
     if (tab === "insights") {
@@ -139,6 +141,14 @@ export function setupLibraryDrawer(library: Library, stats: Stats, onChange: () 
       render();
     });
   }
+
+  byId("shareBtn").addEventListener("click", async () => {
+    const favourites = library.favourites();
+    const link = `${location.origin}${location.pathname}#${encodeShortlist(favourites)}`;
+    const ok = await copyText(link);
+    const n = Math.min(favourites.length, SHARE_LIMIT);
+    toast(ok ? `Link copied: it shows ${n} name${n === 1 ? "" : "s"} to whoever opens it` : "Couldn't copy the link", ok ? "info" : "error");
+  });
 
   byId("exportBtn").addEventListener("click", () => {
     const blob = new Blob([library.exportJson()], { type: "application/json" });

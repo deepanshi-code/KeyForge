@@ -684,7 +684,8 @@ input[type="range"]:focus-visible { outline-offset: 6px; }
   box-shadow: var(--shadow-lg);
 }
 .auth-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
-.auth-dialog form { display: flex; flex-direction: column; gap: 14px; }
+.auth-dialog form, .auth-form { display: flex; flex-direction: column; gap: 14px; }
+.share-list { max-height: 50vh; }
 .auth-dialog .field[hidden], .auth-dialog .link-btn[hidden] { display: none; }
 .auth-head { display: flex; align-items: center; justify-content: space-between; margin: -4px -6px -6px 0; }
 .auth-head h2 { font-size: 18px; font-weight: 650; }

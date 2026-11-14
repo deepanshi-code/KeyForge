@@ -232,3 +232,9 @@ export const HINGLISH_THINGS = unique([
 export const HINGLISH_ENDINGS = unique([
   "hub", "box", "pro", "pay", "go", "kit", "plus", "lab", "zone", "point", "link", "app", "cloud", "flow",
 ]);
+
+/** English endings for Hinglish handles: "yatra_vibes", "jugaad.codes". */
+export const HINGLISH_HANDLE_ENDINGS = unique([
+  "vibes", "diaries", "tales", "codes", "stories", "life", "hub", "zone", "world", "daily",
+  "notes", "studio", "club", "squad", "journal",
+]);

@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "testRunner": "vitest",
+  "mutate": [
+    "src/core/rng.ts",
+    "src/core/entropy.ts",
+    "src/core/stats.ts",
+    "src/core/vault.ts",
+    "src/core/csv.ts",
+    "src/core/share.ts",
+    "src/core/rank.ts",
+    "src/core/library.ts",
+    "src/core/history-buffer.ts",
+    "src/core/availability.ts"
+  ],
+  "reporters": [
+    "clear-text",
+    "progress",
+    "html"
+  ],
+  "htmlReporter": {
+    "fileName": "reports/mutation/index.html"
+  },
+  "concurrency": 4,
+  "timeoutMS": 60000,
+  "tsconfigFile": "stryker-no-tsconfig.json",
+  "disableTypeChecks": false
+}

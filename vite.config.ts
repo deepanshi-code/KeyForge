@@ -44,5 +44,6 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    testTimeout: 20_000, // model-training tests take a few seconds, more under mutation testing
   },
 });

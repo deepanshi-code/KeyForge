@@ -138,6 +138,7 @@ npm run dev</pre>
     <div class="lib-actions">
       <button type="button" id="exportBtn" class="btn small">Export</button>
       <button type="button" id="importBtn" class="btn small">Import</button>
+      <button type="button" id="shareBtn" class="btn small" title="Copy a link to your favourite names. The names travel inside the link; nothing is uploaded.">Share</button>
       <button type="button" id="backupBtn" class="btn small" title="Download an encrypted backup of this profile. Only its password can open it." hidden>Backup</button>
       <button type="button" id="clearBtn" class="btn small danger">Clear</button>
       <input type="file" id="importFile" accept="application/json,.json" hidden>
@@ -188,6 +189,18 @@ npm run dev</pre>
       <p class="auth-note">Profiles live only in this browser. Saved names are encrypted with your password, so nobody else using this device can see them.</p>
       <button type="button" id="authDelete" class="link-btn danger-link">Forgot your password? Delete this profile</button>
     </form>
+  </dialog>
+
+  <dialog id="shareDialog" class="auth-dialog" aria-labelledby="shareTitle">
+    <div class="auth-form">
+      <div class="auth-head">
+        <h2 id="shareTitle">Shared shortlist</h2>
+        <button type="button" id="shareClose" class="icon-btn" aria-label="Close"></button>
+      </div>
+      <p class="muted">Someone shared these names with you. Click one to copy it. Nothing is saved unless you choose to.</p>
+      <ul id="shareList" class="lib-list share-list"></ul>
+      <button type="button" id="shareSave" class="btn primary wide">Save all to my favourites</button>
+    </div>
   </dialog>
 
   <div id="toasts" class="toasts"></div>

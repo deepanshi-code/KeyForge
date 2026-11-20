@@ -28,7 +28,7 @@ Star 3 or more names and the app starts learning what you like:
    - **From your stars:** a character-trigram model of how your favourites "sound", with a nudge towards similar lengths.
    - **From stars *and* skips (learning-to-rank):** once you've passed over 10+ names, a **logistic-regression ranker** takes over. Names that stayed on screen but weren't starred count as "no". It learns from length, separators (`_` vs `.`), vowels, rare letters, Hindi words and hashed letter patterns. In simulated users with a hidden preference it reaches held-out **AUC > 0.8**, and beats the stars-only model when the preference is about what to avoid (`src/core/rank.test.ts`).
 3. **75%** of results are the best matches. **25%** are drawn at random from the same candidates, so you still see new styles and don't get stuck in a bubble. The two are shuffled together.
-4. **"Why this?"** Each result says which favourites it resembles (*Similar to sapphire_comet, sable_tanuki*), using shared letter-triples (Jaccard similarity).
+4. **"Why this?"** Once you star a result, it says which favourites it resembles (*Similar to sapphire_comet, sable_tanuki*), using shared letter-triples (Jaccard similarity). It appears only *after* starring, so it can't nudge your choice or hint which results were picked by taste.
 
 Example: after starring `sapphire_comet`, `sable_tanuki` and `iridescent_orca`, the next batch was `sapphire_ember`, `sapphire_wyvern`, `sable_axolotl`, `sable_paradox`, plus one exploration pick.
 
@@ -37,10 +37,13 @@ Nothing leaves your device. The model is rebuilt from your favourites each time,
 ### 📈 Measured, not just claimed — with a fair test
 The **Insights** tab answers "does taste learning actually help?" using **interleaving**, the method search engines use to compare rankings:
 - Every learning batch mixes **taste picks** with **random picks drawn from the whole candidate pool**, in **shuffled order**. Both groups are seen at the same moment, in random positions.
-- It's **blind**: results aren't labelled by group, and every result gets the same "Similar to…" explanation, so you can't tell which group a name came from.
-- Insights compares each group's star rate, shows a **95% range (Wilson interval)** for each, and runs a **two-proportion z-test**. It only says "taste learning is working" when p < 0.05, and asks for more data below 20 results per group.
+- It's **blind**: results aren't labelled by group, and the "Similar to…" explanation only appears after you star a name, so nothing hints which group a name came from.
+- **Only what you actually saw counts.** A batch is recorded once it has stayed on screen (or you starred something in it), not every time a slider moves. It must have at least 4 results, including at least one random pick.
+- **Analysed per batch.** People tend to star about one name per batch, so stars within a batch aren't independent. Insights compares taste and random star rates *within each batch*, then tests whether taste wins more often than chance with a **sign-flip permutation test** (no normality assumption). It also shows a 95% range for the average gap, and a Wilson interval for each group's overall rate.
+- **Strict, because you keep looking.** The panel is checked again and again, and every look is another chance for luck to look like a result. So the verdict needs **p < 0.01** and at least **20 batches**. A simulation in the tests checks that with no real difference, false "it's working" verdicts stay rare (at most 5 in 100 simulated users).
+- It records which model ranked each batch (stars-only trigram or the stars-and-skips ranker).
 
-**How this was fixed, and why it matters.** The first version compared "learning on" with "learning off". That was biased twice over: the user decided when each mode ran (self-selection), and the random picks came only from the *lowest-ranked leftovers*, which made learning look better than it was. Both problems were found in review and replaced with the design above. Old statistics aren't carried over.
+**How this was fixed, twice, and why it matters.** The first version compared "learning on" with "learning off". That was biased: the user decided when each mode ran (self-selection), and the random picks came only from the *lowest-ranked leftovers*. The second version fixed both, but still treated every shown name as an independent coin flip, counted batches that flashed past during a slider drag, used p < 0.05 on a panel that's checked repeatedly, and showed "Similar to…" before starring, which leaked which group a name came from. A later code review found all four, and they were replaced with the design above. Old statistics aren't carried over.
 
 ### 🔒 Private profiles (encrypted, no server)
 Opening the app shows a **sign-in screen**. Your favourites, history and insights stay locked until you sign in, so nobody else using the same browser can see them.
@@ -94,10 +97,14 @@ The Hindi words are a hand-picked list of 50 common, positive words with plain m
 Can a neural network invent better names than the classic Markov approach? [`ml/RESULTS.md`](ml/RESULTS.md) answers this with a reproducible experiment (`npm run ml`):
 
 - **Models:** a smoothed, tuned **n-gram baseline** vs an **MLP language model written from scratch** (letter embeddings → tanh layer → softmax). Backpropagation is hand-written and verified by a **gradient check**.
-- **Protocol:** one seeded 80/10/10 split of all ~1,000 words; settings tuned on validation only; the test set used once; a **paired bootstrap** 95% interval for the difference.
-- **Result:** on held-out words the two **tie** (perplexity 12.4 vs 12.8; the interval includes 0). But the neural model generates far more usable names: **69.7% valid vs 43.8%** (p < 0.0001), and more distinct ones. Bigger networks overfit (validation gap up to 11.5 points), so **more data, not a bigger model,** is the next step.
+- **Protocol:** one seeded 80/10/10 split of all 1,043 words; settings tuned on validation only; the test set used once; a **paired bootstrap** 95% interval for the difference; the chosen neural setting **retrained with 4 seeds**; results also reported **without near-duplicate test words** (24 of 105 are one edit from a training word).
+- **Prediction: the n-gram wins.** Perplexity on unseen words is 12.5 vs 14.3 (interval for the difference [−3.1, −0.5], excluding 0), and the neural model is 14.4 ± 0.4 across seeds, so it isn't one unlucky run. With ~1,000 words, a well-tuned n-gram beats a small neural network.
+- **Generation: the neural model wins, mostly on length.** 92% of its samples are valid names vs 48% (p < 0.0001). The rejection breakdown shows **96% of that gap is word length**: both average 5.5 letters, but the n-gram's lengths are far more spread out (SD 3.7 vs 1.8; real words 1.4), so it often stops after 1–3 letters or runs on. Pronounceability differs only slightly (3.2% vs 1.5% rejected).
+- **Overfitting:** bigger networks fit training words far better than unseen ones (gap up to 10.8 points); stronger weight decay helped at every size. More data, not a bigger model, is the next step.
 
-The app still uses the Markov model for invented words: it's tiny, instant, and ties on prediction. The experiment, report and trained weights live in `ml/`.
+**An earlier version of this report was wrong, and the correction is part of the result.** It said the neural model was better at avoiding unpronounceable names; a code review broke rejections down by reason and showed the real difference is length. It also reported a tie on prediction, which became an n-gram win once 8 words were added to the data (the Hinglish username endings), which also reshuffled the split. A result that flips with 8 extra words was never a robust tie. The report's interpretation is now generated from the measured numbers, not written by hand.
+
+The app keeps the Markov model for invented words: it predicts better on this data, it's tiny and instant, and it filters out bad lengths before showing anything. The experiment, report and trained weights live in `ml/`.
 
 ## How invented words work (Markov chain)
 
@@ -162,8 +169,8 @@ Requires Node.js 22.12 or later.
 ```bash
 npm install
 npm run dev       # http://localhost:5173
-npm test          # 156 unit tests
-npm run test:e2e  # 8 browser tests, incl. accessibility (first run: npx playwright install chromium)
+npm test          # 162 unit tests
+npm run test:e2e  # 9 browser tests, incl. accessibility (first run: npx playwright install chromium)
 npm run lint      # Biome
 npm run ml        # re-run the neural vs n-gram experiment (~3 min)
 npm run test:mutation  # mutation testing (Stryker), slow
@@ -176,7 +183,7 @@ npm run build     # production build in dist/
 
 ## Testing
 
-- **156 unit tests** (Vitest), including:
+- **162 unit tests** (Vitest), including:
   - chi-square uniformity tests for both random sources
   - a modulo-bias regression test
   - the Markov model never returning a training word
@@ -191,14 +198,18 @@ npm run build     # production build in dist/
   - every theme, size and uniqueness combination
   - storage and import/export
 - **Contract tests** run every registered generator through the same checks: valid defaults, every option value works, out-of-range numbers are rejected, and output is clean.
-- **8 browser tests** (Playwright, on the production build): generate and regenerate with R; GitHub preset output; passwords never saved or exported; create profile → star → reload (locked) → wrong password refused → right password restores the favourite; a shared link shows its names and saves them only on request.
+- **9 browser tests** (Playwright, on the production build): generate and regenerate with R; invalid options clear old results; GitHub preset output; passwords never saved or exported; create profile → star → reload (locked) → wrong password refused → right password restores the favourite; a shared link shows its names and saves them only on request.
 - **Accessibility:** axe scans the main screen in light and dark mode and the sign-in dialog, and fails on any serious issue. Its first run found low-contrast small text and buttons whose spoken names didn't match their visible text; both were fixed.
 - **Mutation testing** (Stryker, `npm run test:mutation`) checks the tests themselves: it plants ~1,000 small bugs in the core modules and counts how many the tests catch. **Score: 70%** overall. Strongest: history buffering 90%, random numbers 83%, statistics 81%. Weakest: availability checks, share links and ranker features (63–66%), which are the next places to add tests. It's too slow for every push, so it runs on demand.
-- **CI:** lint, typecheck, unit tests, browser tests and build must all pass before anything is deployed.
+- **CI:** every pull request and every push runs lint, typecheck, unit tests, browser tests and the build. Nothing is deployed unless all of them pass.
 
 ## Deploy (free, automatic)
 
-The site is published to **GitHub Pages** by `.github/workflows/deploy.yml`. Every push to `main` runs lint, typecheck, unit and browser tests, builds, and publishes the built files to the `gh-pages` branch. If anything fails, the live site stays on the last working version.
+The site is published to **GitHub Pages** by `.github/workflows/deploy.yml`, in two separate jobs:
+- **check** runs on every pull request and push, with read-only access. It runs lint, typecheck, unit and browser tests, then builds the site.
+- **deploy** runs only on `main`, only after check passes. It runs no npm code at all: it takes the built files and pushes them to the `gh-pages` branch. This means third-party code from dependencies never gets near a token that can change the repository.
+
+Every action is pinned to an exact commit, so a moved or compromised version tag can't change what runs. If anything fails, the live site stays on the last working version. The build also stops with an error if it can't inline the app's script or styles, rather than shipping a blank page.
 
 One-time setup: in the repo, open **Settings → Pages**, set **Source** to **Deploy from a branch**, and choose **gh-pages** / **(root)**. The live link is https://deepanshi-code.github.io/KeyForge/.
 

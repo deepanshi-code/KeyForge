@@ -9,7 +9,7 @@ import { createSkips } from "./core/skips.ts";
 import { browserStore, createLibrary } from "./core/library.ts";
 import { findGenerator, GENERATORS } from "./core/registry.ts";
 import { secureRng } from "./core/rng.ts";
-import { createBatchStars, createStats, type Arm } from "./core/stats.ts";
+import { type Arm, createBatchStars, createStats, type ModelKind } from "./core/stats.ts";
 import { MIN_FAVOURITES, POOL_FACTOR, rankByTaste, similarFavourites, trainTaste, type RankedResult } from "./core/taste.ts";
 import { GenerationError, type Generator, type Options } from "./core/types.ts";
 import { validateOptions } from "./core/validate.ts";
@@ -36,12 +36,15 @@ const savedStore = createSwitchableStore(memoryStore());
 let session: Session | null = null;
 const library = createLibrary(savedStore, new Set(GENERATORS.filter(g => g.sensitive).map(g => g.id)));
 const stats = createStats(savedStore);
+const batchStars = createBatchStars(stats);
 const drawer = setupLibraryDrawer(library, stats, () => {
   drawer.render();
   refreshStars();
   updateTasteStatus();
+}, (generatorId, value, nowFavourite) => {
+  // A star on a visible result counts the same whether it's clicked there or in the drawer.
+  if (generatorId === current.id) batchStars.toggled(value, nowFavourite);
 });
-const batchStars = createBatchStars(stats);
 const skips = createSkips(savedStore);
 /** Skips needed before the ranker that also learns from them takes over from the stars-only model. */
 const MIN_SKIPS = 10;
@@ -50,6 +53,7 @@ let lastSeen: { generatorId: string; values: string[] } | null = null;
 const historyBuffer = createHistoryBuffer((generatorId, values) => {
   library.addToHistory(generatorId, values); // ignored for sensitive generators
   lastSeen = { generatorId, values };
+  batchStars.seen(); // the batch stayed on screen: now it counts in Insights
   drawer.render();
 });
 
@@ -213,23 +217,24 @@ byId("shareSave").addEventListener("click", () => {
 // ---- Generating ----
 
 /** Plain random results, or a bigger pool ranked by the user's taste. */
-function pickResults(opts: Options, count: number): { picked: RankedResult[]; shortBy: number; learning: boolean } {
+function pickResults(opts: Options, count: number): { picked: RankedResult[]; shortBy: number; learning: boolean; model: ModelKind } {
   const favourites = favouritesFor(current);
   const canLearn = !current.sensitive && favourites.length >= MIN_FAVOURITES;
   const learning = canLearn && tasteToggle.checked;
 
   if (!learning) {
     const { values, shortBy } = generateBatch(current, opts, count, secureRng);
-    return { picked: values.map(value => ({ value, match: 0, source: "explore" })), shortBy, learning: false };
+    return { picked: values.map(value => ({ value, match: 0, source: "explore" })), shortBy, learning: false, model: "trigram" };
   }
   // Leave out names already starred, so learning surfaces new ones.
   const known = new Set(favourites);
   const pool = generateBatch(current, opts, count * POOL_FACTOR, secureRng).values.filter(v => !known.has(v));
   // With enough skips, learn from both "yes" (stars) and "no" (skips); otherwise from stars alone.
   const skipped = skips.list(current.id).filter(v => !known.has(v));
-  const model = skipped.length >= MIN_SKIPS ? trainRanker(favourites, skipped) : trainTaste(favourites);
+  const useRanker = skipped.length >= MIN_SKIPS;
+  const model = useRanker ? trainRanker(favourites, skipped) : trainTaste(favourites);
   const picked = rankByTaste(pool, model, count, secureRng);
-  return { picked, shortBy: count - picked.length, learning: true };
+  return { picked, shortBy: count - picked.length, learning: true, model: useRanker ? "ranker" : "trigram" };
 }
 
 function generate(): void {
@@ -241,27 +246,41 @@ function generate(): void {
 
   const error = validateOptions(current, opts);
   formError.textContent = error ?? "";
-  if (error) return;
+  if (error) {
+    clearResults();
+    return;
+  }
 
   try {
-    const { picked, shortBy, learning } = pickResults(opts, count);
+    const { picked, shortBy, learning, model } = pickResults(opts, count);
     learningBatch = learning;
     // Only taste batches are measured: each result is credited to the group that picked it.
+    // The batch is recorded once it's been seen (see historyBuffer), not now.
     const arms = new Map<string, Arm>(learning ? picked.map(p => [p.value, p.source === "taste" ? "taste" : "random"]) : []);
-    batchStars.newBatch(arms);
+    batchStars.newBatch(arms, model);
     batchNote.textContent = shortBy > 0 ? `Only ${picked.length} different results are possible with these options.` : "";
     showResults(picked, opts);
     byId("resultCount").textContent = String(picked.length);
     announcer.textContent = `${picked.length} new ${current.name.toLowerCase()} results`;
-    if (learning) {
-      stats.recordShown("taste", picked.filter(p => p.source === "taste").length);
-      stats.recordShown("random", picked.filter(p => p.source === "explore").length);
-    }
     historyBuffer.offer(current.id, picked.map(p => p.value));
   } catch (e) {
     if (!(e instanceof GenerationError)) throw e;
     formError.textContent = e.message;
+    clearResults();
   }
+}
+
+/**
+ * Removes the previous results when there's nothing valid to show, so old rows
+ * (perhaps from another generator) can't be copied, starred or checked.
+ */
+function clearResults(): void {
+  batchStars.newBatch();
+  learningBatch = false;
+  shown = [];
+  results.replaceChildren(h("li", { class: "empty" }, "Fix the option above to see results."));
+  byId("resultCount").textContent = "0";
+  batchNote.textContent = "";
 }
 
 /** Brief inline "copied" state on a row: a check mark instead of the copy icon. */
@@ -276,10 +295,12 @@ function flashCopied(item: HTMLElement): void {
 
 function showResults(picked: RankedResult[], opts: Options): void {
   shown = picked.map(p => p.value);
-  const favourites = learningBatch ? favouritesFor(current) : [];
+  // Rows remember the generator that made them, so handlers never act on a different one.
+  const gen = current;
+  const favourites = learningBatch ? favouritesFor(gen) : [];
 
   results.replaceChildren(...picked.map(({ value }, i) => {
-    const note = current.describe?.(value, opts);
+    const note = gen.describe?.(value, opts);
     const noteEl = note
       ? h("span", { class: "note" },
         note.meter !== undefined
@@ -292,20 +313,22 @@ function showResults(picked: RankedResult[], opts: Options): void {
     // "Why this?" — shown the same way on every result, so you can't tell taste
     // picks from random ones. That keeps the taste-vs-random comparison blind.
     const similar = learningBatch ? similarFavourites(value, favourites) : [];
+    // Shown only AFTER you star a name: taste picks resemble your favourites more often, so
+    // showing it beforehand would hint which group a name came from and spoil the blind test.
     const why = similar.length > 0
-      ? h("span", { class: "why" }, icon("sparkle"), `Similar to ${similar.join(", ")}`)
-      : "";
+      ? h("span", { class: "why", hidden: "" }, icon("sparkle"), `Similar to ${similar.join(", ")}`)
+      : null;
 
     const meta = h("span", { class: "result-meta" },
       // Length matters for handles and repo names (platform limits), not for multi-word values.
-      current.sensitive || value.includes(" ") ? "" : h("span", { title: "Characters" }, `${value.length}`),
+      gen.sensitive || value.includes(" ") ? "" : h("span", { title: "Characters" }, `${value.length}`),
       h("span", { class: "copy-indicator" }, icon("copy")),
     );
 
     // The button's name comes from its visible text (plus a hidden "Copy"), so what
     // voice-control users see matches what they can say.
     const main = h("button", { type: "button", class: "result-main", title: "Click to copy" },
-      h("span", { class: "visually-hidden" }, "Copy "), h("span", { class: "value" }, value), meta, why, noteEl);
+      h("span", { class: "visually-hidden" }, "Copy "), h("span", { class: "value" }, value), meta, why ?? "", noteEl);
     main.addEventListener("click", async () => {
       const ok = await copyText(value);
       if (!ok) {
@@ -314,7 +337,7 @@ function showResults(picked: RankedResult[], opts: Options): void {
       }
       historyBuffer.commit();
       flashCopied(item);
-      announcer.textContent = current.sensitive ? "Password copied" : `Copied ${value}`;
+      announcer.textContent = gen.sensitive ? "Password copied" : `Copied ${value}`;
     });
 
     const actions = h("span", { class: "row-actions" });
@@ -323,20 +346,21 @@ function showResults(picked: RankedResult[], opts: Options): void {
       main,
       actions,
     );
-    if (canCheck(current.id)) {
+    if (canCheck(gen.id)) {
       const check = h("button", {
         type: "button", class: "icon-btn", title: "Check if this name is free", "aria-label": `Check if ${value} is free`,
       }, icon("globe"));
-      check.addEventListener("click", () => void runChecks(item, value));
+      check.addEventListener("click", () => void runChecks(item, gen.id, value));
       actions.append(check);
     }
-    if (!current.sensitive) {
+    if (!gen.sensitive) {
       const star = h("button", { type: "button", class: "icon-btn star", "data-value": value });
       star.addEventListener("click", () => {
-        const saved = library.toggleFavourite(current.id, value);
-        batchStars.toggled(value, saved);
-        historyBuffer.commit();
-        const n = favouritesFor(current).length;
+        const saved = library.toggleFavourite(gen.id, value);
+        historyBuffer.commit(); // starring means it was seen: record the batch first...
+        batchStars.toggled(value, saved); // ...then credit the star to its group
+        if (why) why.hidden = !saved;
+        const n = favouritesFor(gen).length;
         if (saved && tasteToggle.checked && n === MIN_FAVOURITES) toast("Taste learning is now on for new results");
         else if (saved && !session && !guestWarned) {
           guestWarned = true;
@@ -358,7 +382,7 @@ function showResults(picked: RankedResult[], opts: Options): void {
 const CHECKS_KEY = "toolkit:checks-ok";
 const LABELS: Record<CheckResult["status"], string> = { free: "free", taken: "taken", invalid: "not allowed", unknown: "couldn't check" };
 
-async function runChecks(item: HTMLElement, value: string): Promise<void> {
+async function runChecks(item: HTMLElement, generatorId: string, value: string): Promise<void> {
   if (device.getItem(CHECKS_KEY) !== "yes") {
     const ok = confirm(
       "Checking sends this name to GitHub, and for project names also to npm and Google's DNS service, " +
@@ -371,7 +395,7 @@ async function runChecks(item: HTMLElement, value: string): Promise<void> {
       // not remembered; it will ask again next time
     }
   }
-  const checks = checksFor(current.id, value);
+  const checks = checksFor(generatorId, value);
   if (!checks) return;
   const box = item.querySelector(".checks") ?? h("span", { class: "checks", "aria-live": "polite" });
   box.replaceChildren(h("span", { class: "muted" }, "Checking…"));

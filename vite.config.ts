@@ -15,21 +15,27 @@ function inlineIntoHtml(): Plugin {
       const html = bundle["index.html"];
       if (html?.type !== "asset") return;
       let source = String(html.source);
+      const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+      /**
+       * Swaps one tag for its inlined content. If the tag isn't found (say Vite
+       * changes how it writes it), stop the build: deleting the file anyway would
+       * ship a page that points at nothing — a blank site.
+       */
+      const inline = (fileName: string, tag: RegExp, replacement: () => string) => {
+        const before = source;
+        source = source.replace(tag, replacement); // a function: "$&" in the code stays literal
+        if (source === before) this.error(`inline-into-html: no tag for ${fileName} found in index.html`);
+        delete bundle[fileName];
+      };
 
       for (const [fileName, file] of Object.entries(bundle)) {
+        const name = escapeRegExp(fileName);
         if (file.type === "chunk" && file.isEntry) {
           const code = file.code.replace(/<\/script/gi, "<\\/script");
-          source = source.replace(
-            new RegExp(`<script[^>]*src="[^"]*${fileName}"[^>]*></script>`),
-            () => `<script type="module">${code}</script>`,
-          );
-          delete bundle[fileName];
+          inline(fileName, new RegExp(`<script[^>]*src="[^"]*${name}"[^>]*></script>`), () => `<script type="module">${code}</script>`);
         } else if (file.type === "asset" && fileName.endsWith(".css")) {
-          source = source.replace(
-            new RegExp(`<link[^>]*href="[^"]*${fileName}"[^>]*>`),
-            () => `<style>${String(file.source)}</style>`,
-          );
-          delete bundle[fileName];
+          inline(fileName, new RegExp(`<link[^>]*href="[^"]*${name}"[^>]*>`), () => `<style>${String(file.source)}</style>`);
         }
       }
       html.source = source;

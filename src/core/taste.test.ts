@@ -85,28 +85,15 @@ describe("similarFavourites", () => {
   });
 });
 
-describe("stats", () => {
+describe("stats storage", () => {
   const memory = (): KeyValueStore => {
     const data = new Map<string, string>();
     return { getItem: k => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v), removeItem: k => void data.delete(k) };
   };
 
-  it("tracks star rate per mode", () => {
-    const stats = createStats(memory());
-    expect(stats.summary().taste.rate).toBeNull();
-    stats.recordShown("taste", 10);
-    stats.recordStar("taste");
-    stats.recordStar("taste");
-    stats.recordShown("random", 20);
-    stats.recordStar("random");
-    const s = stats.summary();
-    expect(s.taste.rate).toBeCloseTo(0.2);
-    expect(s.random.rate).toBeCloseTo(0.05);
-  });
-
   it("survives corrupted storage", () => {
     const store = memory();
-    store.setItem("toolkit:stats:v2", "{broken");
-    expect(createStats(store).summary().random.shown).toBe(0);
+    store.setItem("toolkit:stats:v3", "{broken");
+    expect(createStats(store).batches()).toEqual([]);
   });
 });

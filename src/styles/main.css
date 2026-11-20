@@ -570,6 +570,7 @@ input[type="range"]:focus-visible { outline-offset: 6px; }
 .meter[data-tone="3"] > span { background: var(--tone-3); }
 
 .why { display: inline-flex; flex-basis: 100%; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; }
+.why[hidden] { display: none; }
 .why .icon { width: 12px; height: 12px; color: var(--accent); }
 
 .row-actions { display: flex; gap: 2px; margin: 5px 4px 0 0; }

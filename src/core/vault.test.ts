@@ -123,3 +123,50 @@ describe("encrypted backups", () => {
     await expect(createProfiles(memoryStore(), ROUNDS).restore("not json", "x")).rejects.toThrow(ProfileError);
   });
 });
+
+describe("refusing crafted or damaged data", () => {
+  async function backupWith(change: (file: Record<string, unknown>) => void): Promise<string> {
+    const profiles = createProfiles(memoryStore(), ROUNDS);
+    const { session } = await profiles.create("Deepa", "correct horse");
+    const file = JSON.parse(await profiles.backup(session));
+    change(file);
+    return JSON.stringify(file);
+  }
+
+  it("rejects a backup asking for an extreme number of rounds (would freeze the tab)", async () => {
+    const file = await backupWith(f => { (f.profile as { iterations: number }).iterations = 1e10; });
+    await expect(createProfiles(memoryStore(), ROUNDS).restore(file, "correct horse")).rejects.toThrow(/unsupported security settings/);
+  });
+
+  it("rejects non-integer, zero or negative rounds", async () => {
+    for (const bad of [0, -5, 1.5]) {
+      const file = await backupWith(f => { (f.profile as { iterations: number }).iterations = bad; });
+      await expect(createProfiles(memoryStore(), ROUNDS).restore(file, "correct horse")).rejects.toThrow(ProfileError);
+    }
+  });
+
+  it("rejects a backup with a malformed salt or nonce", async () => {
+    const badSalt = await backupWith(f => { (f.profile as { salt: string }).salt = "AAAA"; });
+    const badIv = await backupWith(f => { (f.vault as { iv: string }).iv = "AAAA"; });
+    await expect(createProfiles(memoryStore(), ROUNDS).restore(badSalt, "x")).rejects.toThrow(/isn't a KeyForge backup/);
+    await expect(createProfiles(memoryStore(), ROUNDS).restore(badIv, "x")).rejects.toThrow(/isn't a KeyForge backup/);
+  });
+
+  it("won't open a profile whose vault is missing, whatever the password", async () => {
+    const device = memoryStore();
+    const profiles = createProfiles(device, ROUNDS);
+    const { session } = await profiles.create("Deepa", "correct horse");
+    device.removeItem(`toolkit:vault:${session.profile.id}`);
+    await expect(profiles.unlock(session.profile.id, "any password at all")).rejects.toThrow(/missing or damaged/);
+  });
+
+  it("ignores stored profiles with impossible settings", async () => {
+    const device = memoryStore();
+    const profiles = createProfiles(device, ROUNDS);
+    await profiles.create("Deepa", "correct horse");
+    const stored = JSON.parse(device.getItem("toolkit:profiles") ?? "[]");
+    stored[0].iterations = 1e10;
+    device.setItem("toolkit:profiles", JSON.stringify(stored));
+    expect(profiles.list()).toEqual([]);
+  });
+});

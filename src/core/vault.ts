@@ -100,11 +100,40 @@ async function unseal(key: CryptoKey, sealed: Sealed): Promise<string> {
   return decoder.decode(data);
 }
 
+/**
+ * Bounds for PBKDF2 rounds read from storage or a backup file. Without an upper
+ * bound, a crafted backup could make the browser grind through billions of
+ * rounds and freeze the tab every time that profile is opened.
+ */
+export const MIN_ITERATIONS = 1_000;
+export const MAX_ITERATIONS = 5_000_000;
+const SALT_BYTES = 16;
+const IV_BYTES = 12;
+
+const validIterations = (n: unknown): n is number =>
+  typeof n === "number" && Number.isInteger(n) && n >= MIN_ITERATIONS && n <= MAX_ITERATIONS;
+
+function decodesTo(text: unknown, bytes: number): text is string {
+  if (typeof text !== "string") return false;
+  try {
+    return fromBase64(text).length === bytes;
+  } catch {
+    return false;
+  }
+}
+
+/** Encrypted data from storage or a file: a 12-byte nonce and base64 text. */
+function isSealed(x: unknown): x is Sealed {
+  if (typeof x !== "object" || x === null) return false;
+  const v = x as Record<string, unknown>;
+  return decodesTo(v.iv, IV_BYTES) && typeof v.data === "string";
+}
+
 function isProfile(x: unknown): x is Profile {
   if (typeof x !== "object" || x === null) return false;
   const p = x as Record<string, unknown>;
-  return typeof p.id === "string" && typeof p.name === "string" && typeof p.salt === "string" &&
-    typeof p.iterations === "number" && typeof p.createdAt === "number";
+  return typeof p.id === "string" && typeof p.name === "string" && decodesTo(p.salt, SALT_BYTES) &&
+    validIterations(p.iterations) && typeof p.createdAt === "number";
 }
 
 /** An in-memory store, e.g. for guests (forgotten when the tab closes). */
@@ -235,11 +264,21 @@ export function createProfiles(device: KeyValueStore, iterations = PBKDF2_ITERAT
     async unlock(id: string, password: string): Promise<Session | null> {
       const profile = list().find(p => p.id === id);
       if (!profile) throw new ProfileError("That profile no longer exists.");
+      // Every profile has a vault from the moment it's created. If it's gone (storage was
+      // cleared or tampered with), refuse: accepting any password would let anyone in, and
+      // their first save would lock the real owner out.
+      let sealed: unknown;
+      try {
+        sealed = JSON.parse(device.getItem(vaultKey(profile.id)) ?? "null");
+      } catch {
+        sealed = null;
+      }
+      if (!isSealed(sealed)) {
+        throw new ProfileError("This profile's saved data is missing or damaged in this browser, so it can't be opened. Delete it, then restore it from a backup if you have one.");
+      }
       const key = await deriveKey(password, fromBase64(profile.salt), profile.iterations);
       try {
-        const sealed = JSON.parse(device.getItem(vaultKey(profile.id)) ?? "null") as Sealed | null;
-        // No vault yet (it was cleared outside the app): nothing to protect, start empty.
-        const items: unknown = sealed ? JSON.parse(await unseal(key, sealed)) : {};
+        const items: unknown = JSON.parse(await unseal(key, sealed));
         return openSession(profile, key, typeof items === "object" && items !== null ? (items as Record<string, string>) : {});
       } catch {
         return null; // wrong password (decryption failed)
@@ -266,8 +305,11 @@ export function createProfiles(device: KeyValueStore, iterations = PBKDF2_ITERAT
         throw new ProfileError("That file isn't a KeyForge backup.");
       }
       const p = file.profile;
-      if (file.format !== BACKUP_FORMAT || !p || typeof p.salt !== "string" || typeof p.iterations !== "number" || !file.vault) {
+      if (file.format !== BACKUP_FORMAT || !p || !decodesTo(p.salt, SALT_BYTES) || !isSealed(file.vault)) {
         throw new ProfileError("That file isn't a KeyForge backup.");
+      }
+      if (!validIterations(p.iterations)) {
+        throw new ProfileError("That backup uses unsupported security settings, so it can't be restored.");
       }
       const key = await deriveKey(password, fromBase64(p.salt), p.iterations);
       let items: Record<string, string>;

@@ -1,20 +1,23 @@
 import type { Library } from "../core/library.ts";
 import { findGenerator } from "../core/registry.ts";
 import { encodeShortlist, SHARE_LIMIT } from "../core/share.ts";
-import { twoProportionPValue, wilsonInterval, type Stats } from "../core/stats.ts";
+import { ALPHA, analyse, MIN_BATCHES, type Stats, wilsonInterval } from "../core/stats.ts";
 import { byId, copyText, h } from "./dom.ts";
 import { icon } from "./icons.ts";
 import { toast } from "./toast.ts";
 
 type Tab = "favourites" | "history" | "insights";
 
-/** Results needed in each group (taste, random) before the comparison means much. */
-const MIN_SAMPLE = 20;
-
 const percent = (rate: number | null) => (rate === null ? "—" : `${Math.round(rate * 100)}%`);
 
 /** The "Saved" slide-out drawer: favourites, history and insights tabs, plus export/import/clear. */
-export function setupLibraryDrawer(library: Library, stats: Stats, onChange: () => void) {
+export function setupLibraryDrawer(
+  library: Library,
+  stats: Stats,
+  onChange: () => void,
+  /** Told about every star toggled in the drawer, so Insights can credit it like a star on the results. */
+  onFavouriteToggled: (generatorId: string, value: string, nowFavourite: boolean) => void = () => {},
+) {
   const drawer = byId("libraryDrawer");
   const overlay = byId("drawerOverlay");
   const openButton = byId<HTMLButtonElement>("libraryBtn");
@@ -47,39 +50,40 @@ export function setupLibraryDrawer(library: Library, stats: Stats, onChange: () 
 
   /** Compares star rates of taste picks and random picks shown side by side — evidence, not a claim. */
   function renderInsights(): void {
-    const s = stats.summary();
-    const range = (c: typeof s.taste) => {
+    const a = analyse(stats.batches());
+    const range = (c: typeof a.taste) => {
       if (c.shown === 0) return "no data yet";
       const [low, high] = wilsonInterval(c.starred, c.shown);
       return `${c.starred} of ${c.shown} · likely ${percent(low)}–${percent(high)}`;
     };
-    const card = (label: string, c: typeof s.taste) =>
+    const card = (label: string, c: typeof a.taste) =>
       h("div", { class: "stat-card" },
         h("span", { class: "stat-label" }, label),
         h("span", { class: "stat-value" }, percent(c.rate)),
         h("span", { class: "muted small" }, range(c)),
       );
 
-    const p = twoProportionPValue(s.taste, s.random);
-    let verdict: string;
-    if (s.taste.shown < MIN_SAMPLE || s.random.shown < MIN_SAMPLE) {
-      const need = Math.max(0, MIN_SAMPLE - s.taste.shown) + Math.max(0, MIN_SAMPLE - s.random.shown);
-      verdict = `Not enough data yet: about ${need} more results need to be shown with taste learning on. Keep starring the names you genuinely like.`;
-    } else if (p !== null && p < 0.05) {
-      verdict = (s.taste.rate ?? 0) > (s.random.rate ?? 0)
-        ? `Taste learning is working: you star taste picks more often, and a difference this big would happen by luck only ${(p * 100).toFixed(1)}% of the time.`
-        : `Random picks are getting more stars, and that's unlikely to be luck (p = ${p.toFixed(3)}). Taste learning isn't helping for you yet.`;
-    } else {
-      verdict = `No clear difference yet (p = ${p?.toFixed(2) ?? "—"}). The gap could still be luck, so keep going.`;
-    }
+    const points = (x: number) => `${x >= 0 ? "+" : "−"}${Math.abs(Math.round(x * 100))} points`;
+    const gap = a.meanDiff === null ? "" : ` Average gap per batch: ${points(a.meanDiff)}${a.diffInterval
+      ? ` (95% range ${points(a.diffInterval[0])} to ${points(a.diffInterval[1])})` : ""}.`;
+    const verdicts: Record<typeof a.verdict, string> = {
+      "not-enough-data": `Not enough data yet: ${a.batches} of ${MIN_BATCHES} batches measured. A batch counts once it has stayed on screen, so keep looking through results and starring the names you genuinely like.`,
+      "taste-better": `Taste learning is working: in batch after batch you star taste picks more often than random ones (p = ${a.pValue?.toFixed(4)}).${gap}`,
+      "random-better": `Random picks are getting more stars, batch after batch (p = ${a.pValue?.toFixed(4)}). Taste learning isn't helping for you yet.${gap}`,
+      "no-clear-difference": `No clear difference yet (p = ${a.pValue?.toFixed(2)}). The gap could still be luck, so keep going.${gap}`,
+    };
 
     list.replaceChildren(h("li", { class: "insights" },
       h("p", { class: "muted small" },
         "A fair test: every taste-learning batch secretly mixes the best matches with a few names picked at random " +
-        "from the same candidates, in shuffled order. If learning works, you'll star the taste picks more often."),
-      h("div", { class: "stat-grid" }, card("Taste picks starred", s.taste), card("Random picks starred", s.random)),
-      h("p", { class: "verdict" }, verdict),
-      h("p", { class: "muted small" }, "“Likely” is a 95% range (Wilson interval). The verdict uses a two-proportion z-test."),
+        "from the same candidates, in shuffled order. Explanations only appear after you star a name, so you can't " +
+        "tell the two apart. If learning works, you'll star the taste picks more often."),
+      h("div", { class: "stat-grid" }, card("Taste picks starred", a.taste), card("Random picks starred", a.random)),
+      h("p", { class: "verdict" }, verdicts[a.verdict]),
+      h("p", { class: "muted small" },
+        `${a.batches} batches measured${a.rankerBatches > 0 ? ` (${a.rankerBatches} ranked using your skips too)` : ""}. ` +
+        "The verdict compares taste and random picks within each batch (a sign-flip permutation test) and needs " +
+        `p < ${ALPHA} — stricter than usual, because this panel is checked again and again. "Likely" is a 95% range (Wilson interval).`),
     ));
   }
 
@@ -121,7 +125,7 @@ export function setupLibraryDrawer(library: Library, stats: Stats, onChange: () 
         "aria-label": starred ? `Remove ${item.value} from favourites` : `Add ${item.value} to favourites`,
       }, icon("star", starred));
       star.addEventListener("click", () => {
-        library.toggleFavourite(item.generatorId, item.value);
+        onFavouriteToggled(item.generatorId, item.value, library.toggleFavourite(item.generatorId, item.value));
         onChange();
       });
       return h("li", { class: "lib-item" }, copy, star);

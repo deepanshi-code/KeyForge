@@ -1,27 +1,37 @@
-# Tests and builds the site on every push to main, then publishes the built
-# files to the gh-pages branch, which GitHub Pages serves.
-# One-time setup: repo Settings → Pages → Source: "Deploy from a branch",
-# Branch: gh-pages, folder: / (root).
-name: Deploy to GitHub Pages
+# Checks every pull request, and on main also publishes the site.
+#
+# Two jobs, so third-party code never touches a token that can write:
+#   check  — read-only. Installs dependencies and runs lint, typecheck, unit tests,
+#            browser tests and the build, then hands the built site over as an artifact.
+#   deploy — only on main, only after check passes. Runs no npm code at all: it just
+#            downloads the built files and pushes them to the gh-pages branch.
+# Actions are pinned to exact commits (the comment says which version), so a moved
+# or compromised tag can't change what runs here.
+#
+# One-time setup: Settings → Pages → Source: "Deploy from a branch", Branch: gh-pages, / (root).
+name: Check and deploy
 
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch: # allows a manual run from the Actions tab
 
 permissions:
-  contents: write # to push the built site to the gh-pages branch
+  contents: read # the default for every job; deploy asks for more on its own
 
 concurrency:
-  group: pages
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false # don't leave the token in .git/config for later steps
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 24
           cache: npm
@@ -30,17 +40,46 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - name: Playwright version (for the browser cache key)
+        id: pw
+        run: echo "version=$(npx playwright --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e # real browser: profiles, shortcuts, platform rules, accessibility (axe)
+      - run: npm run test:e2e # real browser: profiles, sharing, platform rules, accessibility (axe)
       - run: npm run build
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: site
+          path: dist
+          retention-days: 7
+
+  deploy:
+    needs: check
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # to push the built site to the gh-pages branch
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: site
+          path: dist
       - name: Publish dist/ to the gh-pages branch
         working-directory: dist
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          SHA: ${{ github.sha }}
         run: |
           touch .nojekyll # serve the files as they are, without Jekyll
           git init -q -b gh-pages
-          git config user.name "${{ github.actor }}"
-          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git config user.name "$ACTOR"
+          git config user.email "$ACTOR@users.noreply.github.com"
           git add -A
-          git commit -q -m "Deploy ${{ github.sha }}"
+          git commit -q -m "Deploy $SHA"
           # gh-pages only ever holds the latest build, so it is replaced each time.
-          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${REPO}.git" gh-pages

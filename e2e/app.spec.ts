@@ -101,3 +101,14 @@ test("a shared shortlist link shows its names and saves them only on request", a
   await page.locator("#shareSave").click();
   await expect(page.locator("#savedCount")).toHaveText("2");
 });
+
+test("invalid options clear old results instead of leaving them clickable", async ({ page }) => {
+  await page.goto("./#password");
+  await expect(results(page)).toHaveCount(8);
+  for (const label of ["Uppercase (A–Z)", "Lowercase (a–z)", "Numbers (0–9)", "Symbols (!@#…)"]) {
+    await page.getByText(label, { exact: true }).click();
+  }
+  await expect(page.locator("#formError")).toContainText("at least one");
+  await expect(results(page)).toHaveCount(0);
+  await expect(page.locator("#resultCount")).toHaveText("0");
+});

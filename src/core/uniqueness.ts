@@ -14,7 +14,7 @@ export type Uniqueness = "familiar" | "rare" | "invented";
 
 export const UNIQUENESS_FIELD: SelectField = {
   kind: "select",
-  key: "uniqueness",
+  key: "uniqueness", advanced: true,
   label: "Uniqueness",
   choices: [
     { value: "familiar", label: "Familiar" },

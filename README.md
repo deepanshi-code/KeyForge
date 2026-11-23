@@ -79,6 +79,13 @@ Name generators have a **Uniqueness** option:
 The Hindi words are a hand-picked list of 50 common, positive words with plain meanings (`src/data/words.ts`). Words that hide inside everyday English words ("chai" in *chain*, "desi" in *design*) are left out, so a meaning is never shown for the wrong word.
 
 ### Interface
+- **Look:** dark by default — black with a faint grid and a slow cyan constellation, monospace labels, and a **terminal on the home screen that types real commands and forges real names live**. Light mode keeps the same style. All motion stops if your system asks for reduced motion.
+- **Feels like an app:** a **Home** screen with a guided start, a **Create** screen for each generator, a bottom **tab bar** on phones (Home · Create · Saved · Profile), smooth screen transitions, and an **Install app** button where the browser supports it.
+- **Guided start — "What are you naming?":** ten cards (Instagram handle, GitHub username, gamer tag, startup, desi brand, repo, hackathon team, story character, test personas, strong password). Each one opens the right generator with the right settings, so you get a good result without touching any options.
+- **Fewer options up front:** each generator shows only its 2–3 key choices; everything else is under **More options**.
+- **Live previews:** see a name as a social profile, an app icon on a phone home screen, a website, a team badge or an ID card — generic mock-ups, never a real platform's branding.
+- **Logo maker:** every name gets a generated monogram logo (gradient, shape and colours from the name; "Try another style" for variations), downloadable as **PNG or SVG**.
+- **Say it aloud:** hear any name with your browser's own voices (works offline, nothing sent anywhere).
 - **Clean workbench layout:** a sidebar of generators, options on the left, results as a numbered list. Line icons instead of emoji, one accent colour, very little motion.
 - **Light, dark or system theme**, applied before the page paints, so it never flashes.
 - **Live results:** results update as you change options. Click any result to copy it (a check mark confirms), star it to save it, or **Copy all** to get the whole list, one per line. **Reset** puts the options back to their defaults.
@@ -169,8 +176,8 @@ Requires Node.js 22.12 or later.
 ```bash
 npm install
 npm run dev       # http://localhost:5173
-npm test          # 162 unit tests
-npm run test:e2e  # 9 browser tests, incl. accessibility (first run: npx playwright install chromium)
+npm test          # 173 unit tests
+npm run test:e2e  # 12 browser tests, incl. accessibility (first run: npx playwright install chromium)
 npm run lint      # Biome
 npm run ml        # re-run the neural vs n-gram experiment (~3 min)
 npm run test:mutation  # mutation testing (Stryker), slow
@@ -183,7 +190,7 @@ npm run build     # production build in dist/
 
 ## Testing
 
-- **162 unit tests** (Vitest), including:
+- **173 unit tests** (Vitest), including:
   - chi-square uniformity tests for both random sources
   - a modulo-bias regression test
   - the Markov model never returning a training word
@@ -198,8 +205,8 @@ npm run build     # production build in dist/
   - every theme, size and uniqueness combination
   - storage and import/export
 - **Contract tests** run every registered generator through the same checks: valid defaults, every option value works, out-of-range numbers are rejected, and output is clean.
-- **9 browser tests** (Playwright, on the production build): generate and regenerate with R; invalid options clear old results; GitHub preset output; passwords never saved or exported; create profile → star → reload (locked) → wrong password refused → right password restores the favourite; a shared link shows its names and saves them only on request.
-- **Accessibility:** axe scans the main screen in light and dark mode and the sign-in dialog, and fails on any serious issue. Its first run found low-contrast small text and buttons whose spoken names didn't match their visible text; both were fixed.
+- **12 browser tests** (Playwright, on the production build): guided start → right generator and options; live preview views; generate and regenerate with R; invalid options clear old results; GitHub preset output; passwords never saved or exported; create profile → star → reload (locked) → wrong password refused → right password restores the favourite; a shared link shows its names and saves them only on request.
+- **Accessibility:** axe scans the Home screen in light and dark mode, the Create screen, the sign-in dialog and the preview dialog, and fails on any serious issue. Its first run found low-contrast small text and buttons whose spoken names didn't match their visible text; both were fixed.
 - **Mutation testing** (Stryker, `npm run test:mutation`) checks the tests themselves: it plants ~1,000 small bugs in the core modules and counts how many the tests catch. **Score: 70%** overall. Strongest: history buffering 90%, random numbers 83%, statistics 81%. Weakest: availability checks, share links and ranker features (63–66%), which are the next places to add tests. It's too slow for every push, so it runs on demand.
 - **CI:** every pull request and every push runs lint, typecheck, unit tests, browser tests and the build. Nothing is deployed unless all of them pass.
 

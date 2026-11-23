@@ -13,14 +13,24 @@ const MAX_PILLS = 4;
  *   select  → pill buttons (few choices) or a dropdown (many)
  *   text    → text box
  */
-export function renderFields(container: HTMLElement, gen: Generator, values: Options): () => Options {
+export function renderFields(container: HTMLElement, gen: Generator, values: Options, extraAdvanced?: HTMLElement): () => Options {
   const render = (field: OptionField) => renderField(gen.id, field, values[field.key]);
-  const inputs = gen.fields.filter(f => f.kind !== "boolean").map(render);
-  const toggles = gen.fields.filter(f => f.kind === "boolean").map(render);
-  container.replaceChildren(
-    ...inputs,
-    toggles.length > 0 ? h("div", { class: "toggles" }, ...toggles) : "",
+  /** Inputs first, then switches grouped together. */
+  const group = (fields: OptionField[]) => {
+    const toggles = fields.filter(f => f.kind === "boolean").map(render);
+    return [
+      ...fields.filter(f => f.kind !== "boolean").map(render),
+      toggles.length > 0 ? h("div", { class: "toggles" }, ...toggles) : "",
+    ];
+  };
+  const essentials = gen.fields.filter(f => !f.advanced);
+  const advanced = gen.fields.filter(f => f.advanced);
+  // Everything else lives behind "More options", so the first view is just the few choices that matter.
+  const more = h("details", { class: "more-options" },
+    h("summary", {}, `More options${advanced.length > 0 ? ` (${advanced.length + (extraAdvanced ? 1 : 0)})` : ""}`),
+    h("div", { class: "fields" }, ...group(advanced), extraAdvanced ?? ""),
   );
+  container.replaceChildren(...group(essentials), advanced.length > 0 || extraAdvanced ? more : "");
   return () => readFields(container, gen);
 }
 

@@ -13,6 +13,8 @@ interface FieldBase {
   key: string;
   label: string;
   help?: string;
+  /** Tucked under "More options", so each generator shows only its few key choices up front. */
+  advanced?: boolean;
 }
 
 export interface NumberField extends FieldBase {

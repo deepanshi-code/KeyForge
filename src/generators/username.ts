@@ -179,9 +179,9 @@ export const usernameGenerator: Generator<UsernameOptions> = {
     },
     UNIQUENESS_FIELD,
     { kind: "text", key: "name", label: "Your name (optional)", placeholder: "e.g. Deepa", maxLength: 40, help: "Only the first word is used." },
-    { kind: "text", key: "interest", label: "An interest (optional)", placeholder: "e.g. chess", maxLength: 20 },
+    { kind: "text", key: "interest", advanced: true, label: "An interest (optional)", placeholder: "e.g. chess", maxLength: 20 },
     {
-      kind: "select", key: "separator", label: "Separator",
+      kind: "select", key: "separator", advanced: true, label: "Separator",
       choices: [
         { value: "none", label: "None" },
         { value: "underscore", label: "Underscore _" },
@@ -189,8 +189,8 @@ export const usernameGenerator: Generator<UsernameOptions> = {
         { value: "hyphen", label: "Hyphen -" },
       ],
     },
-    { kind: "number", key: "maxLength", label: "Max length", min: 6, max: 39, help: "The platform's own limit applies if it's shorter." },
-    { kind: "boolean", key: "numbers", label: "Add numbers" },
+    { kind: "number", key: "maxLength", advanced: true, label: "Max length", min: 6, max: 39, help: "The platform's own limit applies if it's shorter." },
+    { kind: "boolean", key: "numbers", advanced: true, label: "Add numbers" },
   ],
   defaults: {
     style: "professional", platform: "any", uniqueness: "rare", name: "", interest: "",

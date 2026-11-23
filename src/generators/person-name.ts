@@ -67,7 +67,7 @@ export const personNameGenerator: Generator<PersonNameOptions> = {
       ],
     },
     {
-      kind: "select", key: "rarity", label: "Rarity",
+      kind: "select", key: "rarity", advanced: true, label: "Rarity",
       choices: [
         { value: "common", label: "Common" },
         { value: "uncommon", label: "Uncommon" },
@@ -76,7 +76,7 @@ export const personNameGenerator: Generator<PersonNameOptions> = {
       help: "Invented first names are new names that sound like real ones from the region.",
     },
     {
-      kind: "select", key: "format", label: "Format",
+      kind: "select", key: "format", advanced: true, label: "Format",
       choices: [
         { value: "full", label: "Full name" },
         { value: "first", label: "First name" },

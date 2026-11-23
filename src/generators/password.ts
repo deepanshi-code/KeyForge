@@ -35,11 +35,11 @@ export const passwordGenerator: Generator<PasswordOptions> = {
   sensitive: true,
   fields: [
     { kind: "number", key: "length", label: "Length", min: 4, max: 128 },
-    { kind: "boolean", key: "upper", label: "Uppercase (A–Z)" },
-    { kind: "boolean", key: "lower", label: "Lowercase (a–z)" },
-    { kind: "boolean", key: "numbers", label: "Numbers (0–9)" },
-    { kind: "boolean", key: "symbols", label: "Symbols (!@#…)" },
-    { kind: "boolean", key: "excludeAmbiguous", label: "Avoid look-alikes (I l 1 O 0 o)" },
+    { kind: "boolean", key: "upper", advanced: true, label: "Uppercase (A–Z)" },
+    { kind: "boolean", key: "lower", advanced: true, label: "Lowercase (a–z)" },
+    { kind: "boolean", key: "numbers", advanced: true, label: "Numbers (0–9)" },
+    { kind: "boolean", key: "symbols", advanced: true, label: "Symbols (!@#…)" },
+    { kind: "boolean", key: "excludeAmbiguous", advanced: true, label: "Avoid look-alikes (I l 1 O 0 o)" },
   ],
   defaults: { length: 16, upper: true, lower: true, numbers: true, symbols: true, excludeAmbiguous: false },
 

@@ -106,7 +106,7 @@ export const projectNameGenerator: Generator<ProjectNameOptions> = {
       help: "Different ways of building a name. Hinglish mixes a Hindi and an English word. Not sure? Keep “Surprise me”.",
     },
     {
-      kind: "select", key: "caseStyle", label: "Case",
+      kind: "select", key: "caseStyle", advanced: true, label: "Case",
       choices: [
         { value: "pascal", label: "PascalCase" },
         { value: "lower", label: "lowercase" },

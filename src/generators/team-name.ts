@@ -115,8 +115,8 @@ export const teamNameGenerator: Generator<TeamNameOptions> = {
     },
     { kind: "number", key: "members", label: "Team members", min: 2, max: 12 },
     UNIQUENESS_FIELD,
-    { kind: "boolean", key: "useCount", label: "Use member count in name (Quantum Quartet)" },
-    { kind: "boolean", key: "alliterate", label: "Alliteration (Byte Brigade)" },
+    { kind: "boolean", key: "useCount", advanced: true, label: "Use member count in name (Quantum Quartet)" },
+    { kind: "boolean", key: "alliterate", advanced: true, label: "Alliteration (Byte Brigade)" },
   ],
   defaults: { theme: "tech", members: 4, useCount: true, uniqueness: "rare", alliterate: true },
 

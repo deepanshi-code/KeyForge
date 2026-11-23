@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="KeyForge: forge unique usernames, project names, team names, personas and secure passwords. Private, encrypted on your device, and it learns your taste.">
-  <meta name="theme-color" content="#fafaf9">
+  <meta name="theme-color" content="#08071a">
   <title>KeyForge</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
@@ -14,10 +14,11 @@
     try {
       var t = localStorage.getItem("toolkit:theme");
       if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      else if (t !== "system") document.documentElement.dataset.theme = "dark"; // dark by default
     } catch (e) {}
   </script>
 </head>
-<body>
+<body data-view="home">
   <!-- Shown only if the app's code didn't load (e.g. this file was double-clicked). main.ts removes it. -->
   <div id="notRunning" style="max-width:560px;margin:40px auto;padding:20px 24px;font:16px/1.5 system-ui,sans-serif;border:1px solid #d4d4d8;border-radius:10px">
     <strong>This page has to be run through Vite.</strong>
@@ -27,7 +28,34 @@ npm run dev</pre>
     <p>Then open <strong>http://localhost:5173</strong>. Or run <code>npm run build</code> and open <code>dist/index.html</code>.</p>
   </div>
 
-  <a class="skip-link" href="#main">Skip to generator</a>
+  <!-- Welcome: "नमस्ते" written out by hand, then a way in. Shown on the first visit. -->
+  <section id="welcome" class="welcome" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle" hidden>
+    <svg class="hello" viewBox="0 0 900 300" aria-hidden="true">
+      <defs>
+        <linearGradient id="helloGlow" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#c4b5fd" />
+          <stop offset="0.5" stop-color="#8b5cf6" />
+          <stop offset="1" stop-color="#22d3ee" />
+        </linearGradient>
+      </defs>
+      <text id="helloText" x="450" y="195" text-anchor="middle" lang="hi">नमस्ते</text>
+    </svg>
+    <div class="welcome-end">
+      <svg class="welcome-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="8" />
+        <path d="M8 9h3v14H8zM11 15.2 18.6 9h4.1l-9.5 7.8zM13.2 15.2 22.7 23h-4.1L11 16.8zM10.5 14.6 14.4 16l-3.9 1.4z" />
+      </svg>
+      <p class="badge"><span class="badge-dot" aria-hidden="true"></span>On-device · Private · Learns your taste</p>
+      <h1 id="welcomeTitle" class="welcome-title">Welcome to Key<span class="grad-text">Forge</span></h1>
+      <p class="welcome-sub">Let's forge a name that's unmistakably you: a handle, a brand, a team, a character. Everything stays on this device.</p>
+      <button type="button" id="welcomeStart" class="pill-btn grad big">Get started →</button>
+    </div>
+    <button type="button" id="welcomeSkip" class="welcome-skip">Skip intro</button>
+  </section>
+
+  <a class="skip-link" href="#main">Skip to content</a>
+  <canvas id="bgCanvas" class="bg-canvas" aria-hidden="true"></canvas>
+  <div class="bg-heat" aria-hidden="true"></div>
 
   <div class="app">
     <aside class="sidebar">
@@ -43,11 +71,17 @@ npm run dev</pre>
       </a>
 
       <nav class="gen-nav" aria-label="Generators">
+        <a href="#home" id="homeLink" class="gen-link home-link"><span class="nav-label">Start</span></a>
+        <a href="#how" id="howLink" class="gen-link home-link"><span class="nav-label">How it works</span></a>
+        <a href="#tools" id="toolsLink" class="gen-link home-link last"><span class="nav-label">All tools</span></a>
         <p class="nav-heading">Generators</p>
         <ul id="genNav"></ul>
       </nav>
 
       <div class="sidebar-foot">
+        <button type="button" id="installBtn" class="nav-btn install-btn" hidden>
+          <span class="nav-label">Install app</span>
+        </button>
         <button type="button" id="libraryBtn" class="nav-btn" aria-haspopup="dialog" aria-controls="libraryDrawer" aria-expanded="false">
           <span class="nav-label">Saved</span>
           <span id="savedCount" class="count" hidden>0</span>
@@ -58,11 +92,91 @@ npm run dev</pre>
         <button type="button" id="themeBtn" class="nav-btn">
           <span class="nav-label">System theme</span>
         </button>
-        <p class="privacy">Runs entirely in your browser. Nothing you generate is sent anywhere.</p>
+        <p class="privacy">Runs entirely in your browser. Nothing you generate is sent anywhere. <button type="button" id="replayIntro" class="link-btn">Replay intro</button></p>
       </div>
     </aside>
 
     <main id="main" class="main" tabindex="-1">
+      <!-- Home: the guided start -->
+      <section id="homeView" class="view home-view" aria-labelledby="homeTitle">
+        <div class="hero">
+          <div class="hero-copy">
+            <p class="hero-pill"><span class="badge-dot" aria-hidden="true"></span>On-device · Private · Learns your taste</p>
+            <h1 id="homeTitle" class="hero-title">Forge a name <span class="hero-em">that's unmistakably you.</span></h1>
+            <p class="hero-sub">Usernames, brand names, team names and personas, shown the way you'll actually use them. Nothing you type ever leaves your device.</p>
+            <div class="hero-actions">
+              <a href="#tools" class="btn btn-molten">What are you naming?</a>
+              <a href="#how" class="btn btn-ghost">How it works</a>
+            </div>
+          </div>
+          <!-- The forge: a real name appears glowing hot, then cools to steel. Decorative; screen readers get the heading and buttons. -->
+          <div class="forge" aria-hidden="true">
+            <div class="forge-head"><span class="forge-label">Fresh from the forge</span><span id="forgeFor" class="forge-for">Instagram handle</span></div>
+            <div class="forge-anvil">
+              <div id="forgeName" class="forge-name">vesper.flux</div>
+              <div id="forgeSparks" class="forge-sparks"></div>
+            </div>
+            <div id="forgeMeta" class="forge-meta">11 characters · up to 30, follows the rules</div>
+            <div class="forge-glow"></div>
+          </div>
+        </div>
+        <ul class="feature-strip">
+          <li><strong>See it before you pick it</strong><span>Every name as a profile, an app icon, a website and a logo.</span></li>
+          <li><strong>Learns your taste</strong><span>Star the ones you like; the next batch matches your style.</span></li>
+          <li><strong>Encrypted on your device</strong><span>Saved names are locked with your password. No account, no server.</span></li>
+        </ul>
+      </section>
+
+      <!-- How it works: three steps, each with a live picture of the real app (src/ui/showcase.ts). -->
+      <section id="howView" class="view how-view" aria-labelledby="stepsTitle">
+        <section class="steps" aria-labelledby="stepsTitle">
+          <div class="section-head centred">
+            <p class="badge"><span class="badge-dot" aria-hidden="true"></span>How it works</p>
+            <h1 id="stepsTitle" class="section-title">Three steps to a name that's <span class="grad-text">yours</span></h1>
+            <p class="section-sub">About a minute. The pictures are the real app, running live with fresh names.</p>
+          </div>
+          <ol class="step-list">
+            <li class="step">
+              <div class="step-text">
+                <span class="step-no" aria-hidden="true">01</span>
+                <h3>Tell it what you're naming</h3>
+                <p>An Instagram handle, a startup, a hackathon team, a story character. Pick one and KeyForge sets up the right options for you.</p>
+              </div>
+              <div id="shot1" class="step-shot" aria-hidden="true"></div>
+            </li>
+            <li class="step">
+              <div class="step-text">
+                <span class="step-no" aria-hidden="true">02</span>
+                <h3>See names the way you'll use them</h3>
+                <p>Fresh names appear as cards. Preview any of them as a profile, an app icon or a website, hear it said aloud, or check if it's taken.</p>
+              </div>
+              <div id="shot2" class="step-shot" aria-hidden="true"></div>
+            </li>
+            <li class="step">
+              <div class="step-text">
+                <span class="step-no" aria-hidden="true">03</span>
+                <h3>Star the ones you love</h3>
+                <p>KeyForge learns your style from your stars and suggests more like them. Your favourites stay encrypted on this device.</p>
+              </div>
+              <div id="shot3" class="step-shot" aria-hidden="true"></div>
+            </li>
+          </ol>
+          <div class="steps-next"><a href="#tools" class="pill-btn grad big">Pick what you're naming →</a></div>
+        </section>
+      </section>
+
+      <!-- All tools: "What are you naming?" -->
+      <section id="toolsView" class="view tools-view" aria-labelledby="naming">
+        <div class="section-head centred">
+          <p class="badge"><span class="badge-dot" aria-hidden="true"></span>All tools</p>
+          <h1 id="naming" class="section-title">What are you <span class="grad-text">naming</span>?</h1>
+          <p class="section-sub">Pick a job and KeyForge sets everything up. You can fine-tune later.</p>
+        </div>
+        <ul id="presetGrid" class="preset-grid"></ul>
+      </section>
+
+      <!-- Create: the generator workspace -->
+      <section id="createView" class="view create-view">
       <header class="page-head">
         <span id="genIcon" class="page-icon"></span>
         <div>
@@ -79,7 +193,7 @@ npm run dev</pre>
           </div>
           <form id="genForm" novalidate>
             <div id="fields" class="fields"></div>
-            <div class="field">
+            <div class="field" id="countField">
               <div class="field-head" id="countHead"><label for="count">How many</label></div>
               <input type="range" id="count" min="1" max="20" step="1" value="8">
             </div>
@@ -92,16 +206,16 @@ npm run dev</pre>
         <section class="panel results-panel" aria-labelledby="resultsTitle">
           <div class="results-head">
             <h2 id="resultsTitle">Results <span id="resultCount" class="result-count"></span></h2>
-            <div class="results-tools">
-              <label id="tasteControl" class="toggle" for="tasteToggle" title="Rank results by similarity to the ones you've starred">
-                <input type="checkbox" role="switch" id="tasteToggle" aria-describedby="tasteStatus">
-                <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
-                <span class="toggle-label">Learn my taste</span>
-              </label>
-              <button type="button" id="copyAllBtn" class="btn">Copy all</button>
-              <button type="button" id="csvBtn" class="btn" title="Download 100 results as a spreadsheet file, e.g. for test data">CSV</button>
-              <button type="button" id="regenBtn" class="btn primary">Regenerate <kbd>R</kbd></button>
-            </div>
+            <button type="button" id="regenBtn" class="btn primary">Regenerate <kbd>R</kbd></button>
+          </div>
+          <div class="results-tools">
+            <label id="tasteControl" class="toggle" for="tasteToggle" title="Rank results by similarity to the ones you've starred">
+              <input type="checkbox" role="switch" id="tasteToggle" aria-describedby="tasteStatus">
+              <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
+              <span class="toggle-label">Learn my taste</span>
+            </label>
+            <button type="button" id="copyAllBtn" class="btn">Copy all</button>
+            <button type="button" id="csvBtn" class="btn" title="Download 100 results as a spreadsheet file, e.g. for test data">CSV</button>
           </div>
           <p id="tasteStatus" class="status-line"></p>
           <p id="batchNote" class="status-line"></p>
@@ -116,8 +230,17 @@ npm run dev</pre>
       <footer class="footer">
         <span>Press <kbd>R</kbd> to regenerate</span>
       </footer>
+      </section>
     </main>
   </div>
+
+  <!-- Phone tab bar: the app's main sections, always one tap away -->
+  <nav class="tabbar" aria-label="Sections">
+    <a href="#home" class="tab-item" data-tab-item="home"><span class="tab-label">Home</span></a>
+    <a href="#username" class="tab-item" data-tab-item="create"><span class="tab-label">Create</span></a>
+    <button type="button" class="tab-item" id="tabSaved"><span class="tab-label">Saved</span></button>
+    <button type="button" class="tab-item" id="tabAccount"><span class="tab-label">Profile</span></button>
+  </nav>
 
   <div id="drawerOverlay" class="overlay" hidden></div>
   <aside id="libraryDrawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="libTitle" hidden>
@@ -200,6 +323,26 @@ npm run dev</pre>
       <p class="muted">Someone shared these names with you. Click one to copy it. Nothing is saved unless you choose to.</p>
       <ul id="shareList" class="lib-list share-list"></ul>
       <button type="button" id="shareSave" class="btn primary wide">Save all to my favourites</button>
+    </div>
+  </dialog>
+
+  <dialog id="previewDialog" class="preview-dialog" aria-labelledby="previewTitle">
+    <div class="preview-head">
+      <div>
+        <p class="preview-kicker">Live preview</p>
+        <h2 id="previewTitle"></h2>
+      </div>
+      <div class="preview-head-actions">
+        <button type="button" id="previewSpeak" class="btn">Say it</button>
+        <button type="button" id="previewClose" class="icon-btn" aria-label="Close"></button>
+      </div>
+    </div>
+    <div id="previewTabs" class="chips" role="group" aria-label="Preview as"></div>
+    <div id="previewStage" class="preview-stage"></div>
+    <div class="preview-actions">
+      <button type="button" id="previewStyle" class="btn">Try another style</button>
+      <button type="button" id="previewPng" class="btn primary">Logo PNG</button>
+      <button type="button" id="previewSvg" class="btn">SVG</button>
     </div>
   </dialog>
 

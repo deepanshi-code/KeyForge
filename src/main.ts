@@ -1,4 +1,5 @@
 import "./styles/main.css";
+import "./styles/studio.css";
 import { canCheck, checksFor, type CheckResult } from "./core/availability.ts";
 import { generateBatch } from "./core/batch.ts";
 import { personaColumns, toCsv } from "./core/csv.ts";
@@ -7,6 +8,7 @@ import { trainRanker } from "./core/rank.ts";
 import { decodeShortlist, type SharedItem } from "./core/share.ts";
 import { createSkips } from "./core/skips.ts";
 import { browserStore, createLibrary } from "./core/library.ts";
+import { PRESETS } from "./core/presets.ts";
 import { findGenerator, GENERATORS } from "./core/registry.ts";
 import { secureRng } from "./core/rng.ts";
 import { type Arm, createBatchStars, createStats, type ModelKind } from "./core/stats.ts";
@@ -19,7 +21,12 @@ import { byId, copyText, h } from "./ui/dom.ts";
 import { linkNumberBox, renderFields } from "./ui/form.ts";
 import { icon } from "./ui/icons.ts";
 import { setupLibraryDrawer } from "./ui/library-panel.ts";
+import { forge, reducedMotion, startEmbers, startForge } from "./ui/ambient.ts";
+import { setupPreview, hasPreview } from "./ui/preview.ts";
+import { startShowcase } from "./ui/showcase.ts";
+import { canSpeak, speak } from "./ui/speak.ts";
 import { setupThemeToggle } from "./ui/theme.ts";
+import { setupWelcome } from "./ui/welcome.ts";
 import { toast } from "./ui/toast.ts";
 
 document.getElementById("notRunning")?.remove();
@@ -157,19 +164,117 @@ function selectGenerator(id: string): void {
     } else a.removeAttribute("aria-current");
   });
 
-  readOptions = renderFields(fieldsEl, current, sessionOptions.get(current.id) ?? current.defaults);
+  readOptions = renderFields(fieldsEl, current, sessionOptions.get(current.id) ?? current.defaults, countField);
+  createTab.href = `#${current.id}`; // "Create" on the phone tab bar returns to the last generator
   byId("secretNote").hidden = !current.sensitive;
   // Secrets are never written to files: no CSV for passwords.
   byId("csvBtn").hidden = current.sensitive;
   generate();
 }
 
-// Only generator ids switch generator; other hashes (e.g. the "#main" skip link) are page anchors.
-window.addEventListener("hashchange", () => {
+// ---- Screens: Home (guided start) and Create (a generator) ----
+
+type View = "home" | "how" | "tools" | "create";
+const VIEW_TITLES: Record<Exclude<View, "create">, string> = {
+  home: "KeyForge · Find a name that's unmistakably you",
+  how: "How it works · KeyForge",
+  tools: "What are you naming? · KeyForge",
+};
+const countField = byId("countField");
+const createTab = document.querySelector<HTMLAnchorElement>('[data-tab-item="create"]')!;
+
+function showView(view: View): void {
+  const changed = document.body.dataset.view !== view;
+  document.body.dataset.view = view;
+  for (const tab of document.querySelectorAll<HTMLElement>("[data-tab-item]")) {
+    if (tab.dataset.tabItem === (view === "create" ? "create" : "home")) tab.setAttribute("aria-current", "page");
+    else tab.removeAttribute("aria-current");
+  }
+  byId("homeLink").toggleAttribute("aria-current", view === "home");
+  byId("howLink").toggleAttribute("aria-current", view === "how");
+  byId("toolsLink").toggleAttribute("aria-current", view === "tools");
+  // Off the Create screen no generator is "current".
+  for (const link of nav.querySelectorAll<HTMLAnchorElement>(".gen-link[data-id]")) {
+    if (view !== "create") link.removeAttribute("aria-current");
+    else if (link.dataset.id === current.id) link.setAttribute("aria-current", "page");
+  }
+  if (view !== "create") document.title = VIEW_TITLES[view];
+  if (changed) window.scrollTo({ top: 0 });
+}
+
+/** Generator ids open Create; "#home" (or nothing), "#how" and "#tools" open those screens; other hashes (the "#main" skip link) are page anchors. */
+function route(): void {
   const id = location.hash.slice(1);
-  if (findGenerator(id)) selectGenerator(id);
-  else openSharedShortlist();
+  if (findGenerator(id)) {
+    selectGenerator(id);
+    showView("create");
+  } else if (id === "" || id === "home") {
+    showView("home");
+  } else if (id === "how" || id === "tools") {
+    showView(id);
+  } else {
+    openSharedShortlist();
+  }
+}
+window.addEventListener("hashchange", route);
+
+// The guided start: one card per job, each setting up the right generator and options.
+byId("presetGrid").replaceChildren(...PRESETS.map(preset => {
+  const card = h("button", { type: "button", class: "preset-card", "data-preset": preset.id, style: `--tone:${preset.tone}` },
+    h("span", { class: "preset-icon" }, icon(preset.icon)),
+    h("span", { class: "preset-title" }, preset.title),
+    h("span", { class: "preset-hint" }, preset.hint),
+    h("span", { class: "preset-example" }, preset.example),
+    h("span", { class: "preset-go", "aria-hidden": "true" }, icon("arrow-right")),
+  );
+  card.addEventListener("click", () => {
+    const gen = findGenerator(preset.generatorId);
+    if (!gen) return;
+    sessionOptions.set(gen.id, { ...gen.defaults, ...preset.options });
+    if (location.hash === `#${gen.id}`) route(); // already there: just apply the new options
+    location.hash = gen.id;
+  });
+  return h("li", {}, card);
+}));
+
+// All tools: every few seconds one card shows a freshly made sample, so the
+// examples are real output, not a fixed list. (Passwords keep their placeholder.)
+if (!reducedMotion()) {
+  setInterval(() => {
+    if (document.body.dataset.view !== "tools" || document.hidden) return;
+    const preset = PRESETS[secureRng.int(PRESETS.length)];
+    const sample = forge(preset);
+    const el = document.querySelector<HTMLElement>(`[data-preset="${preset.id}"] .preset-example`);
+    if (!sample || !el) return;
+    el.textContent = sample;
+    el.classList.remove("fresh");
+    void el.offsetWidth; // restart the fade-in
+    el.classList.add("fresh");
+  }, 2200);
+}
+
+// The home screen's forge (real names, struck hot and cooling) and the drifting embers behind it.
+startForge(PRESETS, () => document.body.dataset.view === "home");
+startEmbers(byId<HTMLCanvasElement>("bgCanvas"));
+startShowcase(() => document.body.dataset.view === "how");
+
+// Phone tab bar: Saved and Profile reuse the sidebar's buttons.
+byId("tabSaved").addEventListener("click", () => byId("libraryBtn").click());
+byId("tabAccount").addEventListener("click", () => byId("accountBtn").click());
+
+// Install as an app (supported browsers offer this; others hide the button).
+let installPrompt: (Event & { prompt(): Promise<void> }) | null = null;
+window.addEventListener("beforeinstallprompt", event => {
+  event.preventDefault();
+  installPrompt = event as Event & { prompt(): Promise<void> };
+  byId("installBtn").hidden = false;
 });
+byId("installBtn").addEventListener("click", async () => {
+  await installPrompt?.prompt();
+  installPrompt = null;
+  byId("installBtn").hidden = true;
+});
+window.addEventListener("appinstalled", () => toast("KeyForge is installed. Open it from your home screen or app list."));
 
 // ---- Shared shortlists (#share=… links) ----
 
@@ -297,6 +402,7 @@ function showResults(picked: RankedResult[], opts: Options): void {
   shown = picked.map(p => p.value);
   // Rows remember the generator that made them, so handlers never act on a different one.
   const gen = current;
+  results.dataset.gen = gen.id;
   const favourites = learningBatch ? favouritesFor(gen) : [];
 
   results.replaceChildren(...picked.map(({ value }, i) => {
@@ -346,6 +452,16 @@ function showResults(picked: RankedResult[], opts: Options): void {
       main,
       actions,
     );
+    if (canSpeak() && !gen.sensitive) {
+      const say = h("button", { type: "button", class: "icon-btn", title: "Say it aloud", "aria-label": `Say ${value} aloud` }, icon("volume"));
+      say.addEventListener("click", () => speak(value));
+      actions.append(say);
+    }
+    if (hasPreview(gen.id)) {
+      const look = h("button", { type: "button", class: "icon-btn preview-btn", title: "Preview: see it as a profile, app icon, website or logo", "aria-label": `Preview ${value}` }, icon("image"));
+      look.addEventListener("click", () => preview.open(gen, value));
+      actions.append(look);
+    }
     if (canCheck(gen.id)) {
       const check = h("button", {
         type: "button", class: "icon-btn", title: "Check if this name is free", "aria-label": `Check if ${value} is free`,
@@ -562,7 +678,7 @@ byId("countHead").append(linkNumberBox(countInput, "How many"));
 // "R" regenerates — unless the user is typing somewhere.
 document.addEventListener("keydown", event => {
   if (event.key.toLowerCase() !== "r" || event.ctrlKey || event.metaKey || event.altKey) return;
-  if (drawer.isOpen() || document.querySelector("dialog[open]")) return;
+  if (drawer.isOpen() || document.querySelector("dialog[open]") || document.body.classList.contains("welcome-open")) return;
   const target = event.target as HTMLElement;
   if (target.matches("input[type=text], input[type=password], input[type=number], textarea, select, [contenteditable]")) return;
   event.preventDefault();
@@ -583,11 +699,31 @@ byId("libraryBtn").prepend(icon("bookmark"));
 byId("drawerClose").append(icon("x"));
 setupThemeToggle(byId<HTMLButtonElement>("themeBtn"));
 renderAccount();
-selectGenerator(location.hash.slice(1));
+const preview = setupPreview();
+// Tab bar and Start link icons.
+for (const [selector, name] of [['[data-tab-item="home"]', "home"], ['[data-tab-item="create"]', "plus"], ["#tabSaved", "bookmark"], ["#tabAccount", "user"], ["#homeLink", "home"], ["#howLink", "sparkle"], ["#toolsLink", "layers"], ["#installBtn", "install"]] as const) {
+  document.querySelector(selector)?.prepend(icon(name));
+}
+// Prepare the Create screen (using the generator in the link, or the first one), then show the right screen.
+selectGenerator(findGenerator(location.hash.slice(1))?.id ?? GENERATORS[0].id);
+route();
 drawer.render();
 // A shared link opens its shortlist first. Otherwise, opening the app shows the
-// sign-in screen when there's something to unlock (or old items to move in).
-if (!openSharedShortlist()) {
+// sign-in screen when there's something to unlock (or old items to move in) —
+// after the welcome screen on a first visit.
+const askToSignIn = () => {
   if (profiles.list().length > 0) auth.show("signin");
   else if (profiles.legacyItemCount() > 0) auth.show("create");
+};
+let welcomeShowing = false;
+const welcome = setupWelcome(device, () => {
+  if (welcomeShowing) {
+    welcomeShowing = false;
+    askToSignIn();
+  }
+  byId("main").focus();
+});
+if (!openSharedShortlist()) {
+  welcomeShowing = welcome.showIfFirstVisit();
+  if (!welcomeShowing) askToSignIn();
 }

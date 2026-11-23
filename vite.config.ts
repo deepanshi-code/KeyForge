@@ -35,7 +35,11 @@ function inlineIntoHtml(): Plugin {
           const code = file.code.replace(/<\/script/gi, "<\\/script");
           inline(fileName, new RegExp(`<script[^>]*src="[^"]*${name}"[^>]*></script>`), () => `<script type="module">${code}</script>`);
         } else if (file.type === "asset" && fileName.endsWith(".css")) {
-          inline(fileName, new RegExp(`<link[^>]*href="[^"]*${name}"[^>]*>`), () => `<style>${String(file.source)}</style>`);
+          // url(./font.woff2) inside assets/x.css means assets/font.woff2. Once the CSS moves into
+          // index.html (one folder up), those paths must say so, or fonts quietly fail to load.
+          const dir = fileName.includes("/") ? fileName.slice(0, fileName.lastIndexOf("/") + 1) : "";
+          const css = String(file.source).replace(/url\((['"]?)\.\//g, (_m, quote: string) => `url(${quote}./${dir}`);
+          inline(fileName, new RegExp(`<link[^>]*href="[^"]*${name}"[^>]*>`), () => `<style>${css}</style>`);
         }
       }
       html.source = source;

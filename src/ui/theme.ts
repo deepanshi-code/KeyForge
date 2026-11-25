@@ -3,7 +3,7 @@ import { icon } from "./icons.ts";
 const THEME_KEY = "toolkit:theme";
 
 /**
- * Dark (the default), light, or follow the system. The colours live in main.css;
+ * Light "paper" (the default), dark "lamp-lit desk", or follow the system. The colours live in main.css;
  * "system" removes the data-theme attribute so the CSS media query decides.
  * index.html applies a saved choice before first paint, so there's no flash.
  */
@@ -18,10 +18,10 @@ type Mode = (typeof MODES)[number]["id"];
 function savedMode(): Mode {
   try {
     const saved = localStorage.getItem(THEME_KEY);
-    // Dark by default; "system" is only used when someone picks it.
-    return saved === "light" || saved === "dark" || saved === "system" ? saved : "dark";
+    // Paper (light) by default; "system" is only used when someone picks it.
+    return saved === "light" || saved === "dark" || saved === "system" ? saved : "light";
   } catch {
-    return "dark";
+    return "light";
   }
 }
 
@@ -54,7 +54,7 @@ export function setupThemeToggle(button: HTMLButtonElement): void {
     applyMode(mode);
     render();
     try {
-      localStorage.setItem(THEME_KEY, mode); // "system" is saved too, since dark is the default
+      localStorage.setItem(THEME_KEY, mode); // "system" is saved too, since light is the default
     } catch {
       // Not saved; the theme still applies for this visit.
     }

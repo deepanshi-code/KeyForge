@@ -8,7 +8,7 @@ import { trainRanker } from "./core/rank.ts";
 import { decodeShortlist, type SharedItem } from "./core/share.ts";
 import { createSkips } from "./core/skips.ts";
 import { browserStore, createLibrary } from "./core/library.ts";
-import { PRESETS } from "./core/presets.ts";
+import { type Preset, PRESETS } from "./core/presets.ts";
 import { findGenerator, GENERATORS } from "./core/registry.ts";
 import { secureRng } from "./core/rng.ts";
 import { type Arm, createBatchStars, createStats, type ModelKind } from "./core/stats.ts";
@@ -21,7 +21,9 @@ import { byId, copyText, h } from "./ui/dom.ts";
 import { linkNumberBox, renderFields } from "./ui/form.ts";
 import { icon } from "./ui/icons.ts";
 import { setupLibraryDrawer } from "./ui/library-panel.ts";
-import { forge, reducedMotion, startEmbers, startForge } from "./ui/ambient.ts";
+import { forge, reducedMotion } from "./ui/ambient.ts";
+import { setupQuickForge } from "./ui/quick.ts";
+import { setupRate } from "./ui/rate.ts";
 import { setupPreview, hasPreview } from "./ui/preview.ts";
 import { startShowcase } from "./ui/showcase.ts";
 import { canSpeak, speak } from "./ui/speak.ts";
@@ -165,6 +167,17 @@ function selectGenerator(id: string): void {
   });
 
   readOptions = renderFields(fieldsEl, current, sessionOptions.get(current.id) ?? current.defaults, countField);
+  const madeFor = byId("madeFor");
+  const uses = PRESETS.filter(p => p.generatorId === current.id && Object.keys(p.options).length > 0);
+  madeFor.hidden = uses.length === 0;
+  madeFor.replaceChildren(h("span", { class: "made-for-label" }, "Set up for"), ...uses.map(preset => {
+    const chip = h("button", { type: "button", class: "chip small" }, preset.title);
+    chip.addEventListener("click", () => {
+      openPreset(preset);
+      toast(`Set up for ${preset.title.toLowerCase()}`);
+    });
+    return chip;
+  }));
   createTab.href = `#${current.id}`; // "Create" on the phone tab bar returns to the last generator
   byId("secretNote").hidden = !current.sensitive;
   // Secrets are never written to files: no CSV for passwords.
@@ -174,11 +187,12 @@ function selectGenerator(id: string): void {
 
 // ---- Screens: Home (guided start) and Create (a generator) ----
 
-type View = "home" | "how" | "tools" | "create";
+type View = "home" | "how" | "tools" | "rate" | "create";
 const VIEW_TITLES: Record<Exclude<View, "create">, string> = {
   home: "KeyForge · Find a name that's unmistakably you",
   how: "How it works · KeyForge",
   tools: "What are you naming? · KeyForge",
+  rate: "Rate a name · KeyForge",
 };
 const countField = byId("countField");
 const createTab = document.querySelector<HTMLAnchorElement>('[data-tab-item="create"]')!;
@@ -193,6 +207,7 @@ function showView(view: View): void {
   byId("homeLink").toggleAttribute("aria-current", view === "home");
   byId("howLink").toggleAttribute("aria-current", view === "how");
   byId("toolsLink").toggleAttribute("aria-current", view === "tools");
+  byId("rateLink").toggleAttribute("aria-current", view === "rate");
   // Off the Create screen no generator is "current".
   for (const link of nav.querySelectorAll<HTMLAnchorElement>(".gen-link[data-id]")) {
     if (view !== "create") link.removeAttribute("aria-current");
@@ -210,7 +225,7 @@ function route(): void {
     showView("create");
   } else if (id === "" || id === "home") {
     showView("home");
-  } else if (id === "how" || id === "tools") {
+  } else if (id === "how" || id === "tools" || id === "rate") {
     showView(id);
   } else {
     openSharedShortlist();
@@ -222,20 +237,24 @@ window.addEventListener("hashchange", route);
 byId("presetGrid").replaceChildren(...PRESETS.map(preset => {
   const card = h("button", { type: "button", class: "preset-card", "data-preset": preset.id, style: `--tone:${preset.tone}` },
     h("span", { class: "preset-icon" }, icon(preset.icon)),
+    h("span", { class: "preset-cat" }, `${findGenerator(preset.generatorId)?.name ?? ""} tool`),
     h("span", { class: "preset-title" }, preset.title),
     h("span", { class: "preset-hint" }, preset.hint),
     h("span", { class: "preset-example" }, preset.example),
     h("span", { class: "preset-go", "aria-hidden": "true" }, icon("arrow-right")),
   );
-  card.addEventListener("click", () => {
-    const gen = findGenerator(preset.generatorId);
-    if (!gen) return;
-    sessionOptions.set(gen.id, { ...gen.defaults, ...preset.options });
-    if (location.hash === `#${gen.id}`) route(); // already there: just apply the new options
-    location.hash = gen.id;
-  });
+  card.addEventListener("click", () => openPreset(preset));
   return h("li", {}, card);
 }));
+
+/** Opens a preset's generator with the preset's options applied. */
+function openPreset(preset: Preset): void {
+  const gen = findGenerator(preset.generatorId);
+  if (!gen) return;
+  sessionOptions.set(gen.id, { ...gen.defaults, ...preset.options });
+  if (location.hash === `#${gen.id}`) route(); // already there: just apply the new options
+  location.hash = gen.id;
+}
 
 // All tools: every few seconds one card shows a freshly made sample, so the
 // examples are real output, not a fixed list. (Passwords keep their placeholder.)
@@ -253,9 +272,17 @@ if (!reducedMotion()) {
   }, 2200);
 }
 
-// The home screen's forge (real names, struck hot and cooling) and the drifting embers behind it.
-startForge(PRESETS, () => document.body.dataset.view === "home");
-startEmbers(byId<HTMLCanvasElement>("bgCanvas"));
+// Rate a name: works with the same previews and voice as the results.
+const rate = setupRate({
+  preview: name => {
+    const username = findGenerator("username");
+    if (username) preview.open(username, name);
+  },
+  speak: canSpeak() ? speak : null,
+});
+
+// Home's Try-it card: real names to copy straight away.
+setupQuickForge(PRESETS, openPreset);
 startShowcase(() => document.body.dataset.view === "how");
 
 // Phone tab bar: Saved and Profile reuse the sidebar's buttons.
@@ -398,6 +425,17 @@ function flashCopied(item: HTMLElement): void {
   }, 1200);
 }
 
+/** A result's text. Personas ("Name · @handle · email") get one line per part; the text itself is unchanged. */
+function valueEl(genId: string, value: string): HTMLElement {
+  const parts = value.split(" · ");
+  if (genId !== "persona" || parts.length !== 3) return h("span", { class: "value" }, value);
+  const sep = () => h("span", { class: "visually-hidden" }, " · ");
+  return h("span", { class: "value persona-value" },
+    h("span", { class: "pv-name" }, parts[0]), sep(),
+    h("span", { class: "pv-handle" }, parts[1]), sep(),
+    h("span", { class: "pv-email" }, parts[2]));
+}
+
 function showResults(picked: RankedResult[], opts: Options): void {
   shown = picked.map(p => p.value);
   // Rows remember the generator that made them, so handlers never act on a different one.
@@ -434,7 +472,7 @@ function showResults(picked: RankedResult[], opts: Options): void {
     // The button's name comes from its visible text (plus a hidden "Copy"), so what
     // voice-control users see matches what they can say.
     const main = h("button", { type: "button", class: "result-main", title: "Click to copy" },
-      h("span", { class: "visually-hidden" }, "Copy "), h("span", { class: "value" }, value), meta, why ?? "", noteEl);
+      h("span", { class: "visually-hidden" }, "Copy "), valueEl(gen.id, value), meta, why ?? "", noteEl);
     main.addEventListener("click", async () => {
       const ok = await copyText(value);
       if (!ok) {
@@ -461,6 +499,16 @@ function showResults(picked: RankedResult[], opts: Options): void {
       const look = h("button", { type: "button", class: "icon-btn preview-btn", title: "Preview: see it as a profile, app icon, website or logo", "aria-label": `Preview ${value}` }, icon("image"));
       look.addEventListener("click", () => preview.open(gen, value));
       actions.append(look);
+    }
+    if (gen.id === "username") {
+      const rateBtn = h("button", {
+        type: "button", class: "icon-btn", title: "Rate it, and see variations if it's taken", "aria-label": `Rate ${value} and see variations`,
+      }, icon("chart"));
+      rateBtn.addEventListener("click", () => {
+        rate.show(value);
+        location.hash = "rate";
+      });
+      actions.append(rateBtn);
     }
     if (canCheck(gen.id)) {
       const check = h("button", {
@@ -701,7 +749,7 @@ setupThemeToggle(byId<HTMLButtonElement>("themeBtn"));
 renderAccount();
 const preview = setupPreview();
 // Tab bar and Start link icons.
-for (const [selector, name] of [['[data-tab-item="home"]', "home"], ['[data-tab-item="create"]', "plus"], ["#tabSaved", "bookmark"], ["#tabAccount", "user"], ["#homeLink", "home"], ["#howLink", "sparkle"], ["#toolsLink", "layers"], ["#installBtn", "install"]] as const) {
+for (const [selector, name] of [['[data-tab-item="home"]', "home"], ['[data-tab-item="create"]', "plus"], ["#tabSaved", "bookmark"], ["#tabAccount", "user"], ["#homeLink", "home"], ["#howLink", "sparkle"], ["#toolsLink", "layers"], ["#rateLink", "chart"], ["#installBtn", "install"]] as const) {
   document.querySelector(selector)?.prepend(icon(name));
 }
 // Prepare the Create screen (using the generator in the link, or the first one), then show the right screen.

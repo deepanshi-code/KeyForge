@@ -1,4 +1,8 @@
 import "@fontsource/kalam/700.css";
+import "@fontsource/fraunces/600.css";
+import "@fontsource/fraunces/700.css";
+import "@fontsource/fraunces/500-italic.css";
+import "@fontsource/fraunces/600-italic.css";
 import type { KeyValueStore } from "../core/library.ts";
 import { reducedMotion } from "./ambient.ts";
 import { byId } from "./dom.ts";

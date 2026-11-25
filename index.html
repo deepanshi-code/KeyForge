@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="KeyForge: forge unique usernames, project names, team names, personas and secure passwords. Private, encrypted on your device, and it learns your taste.">
-  <meta name="theme-color" content="#08071a">
+  <meta name="theme-color" content="#faf3f3">
   <title>KeyForge</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
@@ -14,7 +14,7 @@
     try {
       var t = localStorage.getItem("toolkit:theme");
       if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
-      else if (t !== "system") document.documentElement.dataset.theme = "dark"; // dark by default
+      else if (t !== "system") document.documentElement.dataset.theme = "light"; // paper by default
     } catch (e) {}
   </script>
 </head>
@@ -33,9 +33,9 @@ npm run dev</pre>
     <svg class="hello" viewBox="0 0 900 300" aria-hidden="true">
       <defs>
         <linearGradient id="helloGlow" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#c4b5fd" />
-          <stop offset="0.5" stop-color="#8b5cf6" />
-          <stop offset="1" stop-color="#22d3ee" />
+          <stop offset="0" stop-color="#c0577a" />
+          <stop offset="0.55" stop-color="#7b2d5b" />
+          <stop offset="1" stop-color="#4f1d3b" />
         </linearGradient>
       </defs>
       <text id="helloText" x="450" y="195" text-anchor="middle" lang="hi">नमस्ते</text>
@@ -54,12 +54,11 @@ npm run dev</pre>
   </section>
 
   <a class="skip-link" href="#main">Skip to content</a>
-  <canvas id="bgCanvas" class="bg-canvas" aria-hidden="true"></canvas>
-  <div class="bg-heat" aria-hidden="true"></div>
 
   <div class="app">
-    <aside class="sidebar">
-      <a class="brand" href="#">
+    <!-- Top bar: brand, pages and your things; on the Create screen, a row of generator tabs. -->
+    <header class="sidebar topbar">
+      <a class="brand" href="#home">
         <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
           <rect width="32" height="32" rx="8" />
           <path d="M8 9h3v14H8zM11 15.2 18.6 9h4.1l-9.5 7.8zM13.2 15.2 22.7 23h-4.1L11 16.8zM10.5 14.6 14.4 16l-3.9 1.4z" />
@@ -70,12 +69,11 @@ npm run dev</pre>
         </span>
       </a>
 
-      <nav class="gen-nav" aria-label="Generators">
+      <nav class="top-links" aria-label="Pages">
         <a href="#home" id="homeLink" class="gen-link home-link"><span class="nav-label">Start</span></a>
         <a href="#how" id="howLink" class="gen-link home-link"><span class="nav-label">How it works</span></a>
-        <a href="#tools" id="toolsLink" class="gen-link home-link last"><span class="nav-label">All tools</span></a>
-        <p class="nav-heading">Generators</p>
-        <ul id="genNav"></ul>
+        <a href="#tools" id="toolsLink" class="gen-link home-link"><span class="nav-label">All tools</span></a>
+        <a href="#rate" id="rateLink" class="gen-link home-link"><span class="nav-label">Rate a name</span></a>
       </nav>
 
       <div class="sidebar-foot">
@@ -92,16 +90,20 @@ npm run dev</pre>
         <button type="button" id="themeBtn" class="nav-btn">
           <span class="nav-label">System theme</span>
         </button>
-        <p class="privacy">Runs entirely in your browser. Nothing you generate is sent anywhere. <button type="button" id="replayIntro" class="link-btn">Replay intro</button></p>
       </div>
-    </aside>
+
+      <nav class="gen-nav" aria-label="Generators">
+        <p class="nav-heading">Generators</p>
+        <ul id="genNav"></ul>
+      </nav>
+    </header>
 
     <main id="main" class="main" tabindex="-1">
       <!-- Home: the guided start -->
       <section id="homeView" class="view home-view" aria-labelledby="homeTitle">
         <div class="hero">
           <div class="hero-copy">
-            <p class="hero-pill"><span class="badge-dot" aria-hidden="true"></span>On-device · Private · Learns your taste</p>
+            <p class="hero-pill stamp"><span class="badge-dot" aria-hidden="true"></span>On-device · Private · Learns your taste</p>
             <h1 id="homeTitle" class="hero-title">Forge a name <span class="hero-em">that's unmistakably you.</span></h1>
             <p class="hero-sub">Usernames, brand names, team names and personas, shown the way you'll actually use them. Nothing you type ever leaves your device.</p>
             <div class="hero-actions">
@@ -109,16 +111,18 @@ npm run dev</pre>
               <a href="#how" class="btn btn-ghost">How it works</a>
             </div>
           </div>
-          <!-- The forge: a real name appears glowing hot, then cools to steel. Decorative; screen readers get the heading and buttons. -->
-          <div class="forge" aria-hidden="true">
-            <div class="forge-head"><span class="forge-label">Fresh from the forge</span><span id="forgeFor" class="forge-for">Instagram handle</span></div>
-            <div class="forge-anvil">
-              <div id="forgeName" class="forge-name">vesper.flux</div>
-              <div id="forgeSparks" class="forge-sparks"></div>
+          <!-- Try it: real names straight away; click one to copy it (src/ui/quick.ts). -->
+          <section class="forge quick" aria-labelledby="quickTitle">
+            <p class="margin-note note-quick" aria-hidden="true">fresh names, made just now. Go on, click one</p>
+            <div class="forge-head">
+              <h2 id="quickTitle" class="forge-label">Try it: names made just now</h2>
+              <button type="button" id="quickShuffle" class="link-btn quick-shuffle">Shuffle</button>
             </div>
-            <div id="forgeMeta" class="forge-meta">11 characters · up to 30, follows the rules</div>
-            <div class="forge-glow"></div>
-          </div>
+            <div id="quickChips" class="quick-chips" role="group" aria-label="What are you naming?"></div>
+            <ul id="quickList" class="quick-list"></ul>
+            <p class="quick-foot"><span>Click a name to copy it.</span> <a id="quickMore" href="#username" class="quick-more">More options →</a></p>
+            <div class="forge-glow" aria-hidden="true"></div>
+          </section>
         </div>
         <ul class="feature-strip">
           <li><strong>See it before you pick it</strong><span>Every name as a profile, an app icon, a website and a logo.</span></li>
@@ -134,6 +138,7 @@ npm run dev</pre>
             <p class="badge"><span class="badge-dot" aria-hidden="true"></span>How it works</p>
             <h1 id="stepsTitle" class="section-title">Three steps to a name that's <span class="grad-text">yours</span></h1>
             <p class="section-sub">About a minute. The pictures are the real app, running live with fresh names.</p>
+            <p class="margin-note" aria-hidden="true">live, not screenshots!</p>
           </div>
           <ol class="step-list">
             <li class="step">
@@ -171,8 +176,29 @@ npm run dev</pre>
           <p class="badge"><span class="badge-dot" aria-hidden="true"></span>All tools</p>
           <h1 id="naming" class="section-title">What are you <span class="grad-text">naming</span>?</h1>
           <p class="section-sub">Pick a job and KeyForge sets everything up. You can fine-tune later.</p>
+          <p class="margin-note" aria-hidden="true">pick one, change anything later</p>
         </div>
         <ul id="presetGrid" class="preset-grid"></ul>
+        <a href="#rate" class="rate-banner">
+          <span class="rate-banner-text"><strong>Already have a name?</strong> See if it fits Instagram, X, GitHub and Discord, how easy it is to say, and what's close if it's taken.</span>
+          <span class="rate-banner-go">Rate a name →</span>
+        </a>
+      </section>
+
+      <!-- Rate a name: check one you already have, and see close variations (src/ui/rate.ts). -->
+      <section id="rateView" class="view rate-view" aria-labelledby="rateTitle">
+        <div class="section-head centred">
+          <p class="badge"><span class="badge-dot" aria-hidden="true"></span>Rate a name</p>
+          <h1 id="rateTitle" class="section-title">Is your name a <span class="grad-text">keeper</span>?</h1>
+          <p class="section-sub">Type a name you already have. See where it fits, how easy it is to say, and what's close if it's taken.</p>
+          <p class="margin-note" aria-hidden="true">it updates as you type</p>
+        </div>
+        <form id="rateForm" class="rate-form" role="search">
+          <label for="rateInput" class="visually-hidden">Name to rate</label>
+          <input id="rateInput" type="text" autocomplete="off" spellcheck="false" maxlength="60" placeholder="e.g. vesper.flux">
+          <button type="submit" class="btn-molten">Rate it</button>
+        </form>
+        <div id="rateResult" class="rate-result" aria-live="polite" hidden></div>
       </section>
 
       <!-- Create: the generator workspace -->
@@ -182,6 +208,7 @@ npm run dev</pre>
         <div>
           <h1 id="genTitle"></h1>
           <p id="genDesc" class="muted"></p>
+          <div id="madeFor" class="made-for" hidden></div>
         </div>
       </header>
 
@@ -232,6 +259,10 @@ npm run dev</pre>
       </footer>
       </section>
     </main>
+
+    <footer class="site-foot">
+      <p class="privacy">Runs entirely in your browser. Nothing you generate is sent anywhere. <button type="button" id="replayIntro" class="link-btn">Replay intro</button></p>
+    </footer>
   </div>
 
   <!-- Phone tab bar: the app's main sections, always one tap away -->

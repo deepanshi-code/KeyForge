@@ -13,7 +13,7 @@ interface FieldBase {
   key: string;
   label: string;
   help?: string;
-  /** Tucked under "More options", so each generator shows only its few key choices up front. */
+  /** A finer option: listed after the generator's key choices. */
   advanced?: boolean;
 }
 

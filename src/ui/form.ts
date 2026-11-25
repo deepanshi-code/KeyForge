@@ -23,14 +23,10 @@ export function renderFields(container: HTMLElement, gen: Generator, values: Opt
       toggles.length > 0 ? h("div", { class: "toggles" }, ...toggles) : "",
     ];
   };
+  // Every option is visible: the key choices first, then the finer ones, then any extra (e.g. "How many").
   const essentials = gen.fields.filter(f => !f.advanced);
-  const advanced = gen.fields.filter(f => f.advanced);
-  // Everything else lives behind "More options", so the first view is just the few choices that matter.
-  const more = h("details", { class: "more-options" },
-    h("summary", {}, `More options${advanced.length > 0 ? ` (${advanced.length + (extraAdvanced ? 1 : 0)})` : ""}`),
-    h("div", { class: "fields" }, ...group(advanced), extraAdvanced ?? ""),
-  );
-  container.replaceChildren(...group(essentials), advanced.length > 0 || extraAdvanced ? more : "");
+  const finer = gen.fields.filter(f => f.advanced);
+  container.replaceChildren(...group([...essentials, ...finer]), extraAdvanced ?? "");
   return () => readFields(container, gen);
 }
 

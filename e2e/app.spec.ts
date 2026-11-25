@@ -26,7 +26,6 @@ test("generates results and regenerates with R", async ({ page }) => {
 
 test("GitHub preset only produces valid GitHub usernames", async ({ page }) => {
   await page.goto("./#username");
-  await page.locator(".more-options summary").click();
   await page.getByLabel("Underscore _").check();
   await page.getByLabel("Platform").selectOption("github");
   // Results regenerate shortly after the change; wait until the new batch is on screen.
@@ -113,7 +112,6 @@ test("a shared shortlist link shows its names and saves them only on request", a
 test("invalid options clear old results instead of leaving them clickable", async ({ page }) => {
   await page.goto("./#password");
   await expect(results(page)).toHaveCount(8);
-  await page.locator(".more-options summary").click();
   for (const label of ["Uppercase (A–Z)", "Lowercase (a–z)", "Numbers (0–9)", "Symbols (!@#…)"]) {
     await page.getByText(label, { exact: true }).click();
   }
@@ -204,4 +202,57 @@ test("How it works and All tools have no serious accessibility issues in either 
       expect((await new AxeBuilder({ page }).analyze()).violations.filter(v => v.impact === "serious" || v.impact === "critical"), `${screen} ${theme}`).toEqual([]);
     }
   }
+});
+
+test("home shows real names straight away: copy one, or open the full tool set up for that job", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("./");
+  const names = page.locator("#quickList .quick-name");
+  await expect(names).toHaveCount(5);
+  await page.locator("#quickChips").getByRole("button", { name: "Instagram handle" }).click();
+  await expect(page.locator("#quickChips").getByRole("button", { name: "Instagram handle" })).toHaveAttribute("aria-pressed", "true");
+  const first = (await names.first().locator(".quick-value").textContent()) ?? "";
+  await names.first().click();
+  await expect(page.locator(".toast").last()).toContainText(`Copied ${first}`);
+  await page.locator("#quickMore").click();
+  await expect(page).toHaveURL(/#username$/);
+  await expect(page.getByLabel("Platform")).toHaveValue("instagram");
+  // The generator links back to the jobs it's set up for.
+  await expect(page.locator("#madeFor").getByRole("button", { name: "GitHub username" })).toBeVisible();
+});
+
+test("persona results show name, handle and email on their own lines", async ({ page }) => {
+  await page.goto("./#persona");
+  const first = page.locator("#results .persona-value").first();
+  await expect(first.locator(".pv-name")).not.toBeEmpty();
+  await expect(first.locator(".pv-handle")).toHaveText(/^@/);
+  await expect(first.locator(".pv-email")).toHaveText(/@example\.com$/);
+  // The value itself is unchanged, so copying and saving still use "Name · @handle · email".
+  await expect(first).toHaveText(/ · @.+ · .+@example\.com$/);
+});
+
+test("rate a name: platform fit, reasons and variations, as you type", async ({ page }) => {
+  await page.goto("./#rate");
+  await page.getByLabel("Name to rate").fill("vesper.flux");
+  const result = page.locator("#rateResult");
+  await expect(result).toBeVisible();
+  await expect(result.locator(".rate-number span")).toHaveText(/^\d+$/);
+  // GitHub doesn't allow dots, and says so.
+  await expect(result.locator(".rate-platforms li", { hasText: "GitHub" })).toContainText("Can't use");
+  await expect(result.locator(".rate-platforms li", { hasText: "Instagram" })).toContainText("Fits");
+  // Variations follow the chosen platform's rules.
+  await result.getByRole("button", { name: "GitHub", exact: true }).click();
+  const variations = await result.locator(".rate-variation").allTextContents();
+  expect(variations.length).toBeGreaterThan(3);
+  for (const v of variations) expect(v).toMatch(/^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9]))*$/);
+  expect((await new AxeBuilder({ page }).analyze()).violations.filter(v => v.impact === "serious" || v.impact === "critical")).toEqual([]);
+});
+
+test("a username result opens Rate a name for that name", async ({ page }) => {
+  await page.goto("./#username");
+  const first = (await page.locator("#results .value").first().textContent()) ?? "";
+  await page.locator("#results .result").first().getByRole("button", { name: /^Rate / }).click();
+  await expect(page).toHaveURL(/#rate$/);
+  await expect(page.getByLabel("Name to rate")).toHaveValue(first);
+  await expect(page.locator("#rateResult .rate-handle")).toHaveText(first);
 });
